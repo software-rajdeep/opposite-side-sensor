@@ -1,0 +1,30 @@
+export const SERVER = "http://192.168.1.2:5000";
+
+export const DEMO_ACCOUNTS = [
+  { username: "superadmin", password: "superadmin123", role: "superadmin" },
+  { username: "admin",      password: "admin123",      role: "admin"      },
+  { username: "supervisor", password: "super123",      role: "supervisor" },
+  { username: "worker",     password: "worker123",     role: "worker"     },
+];
+
+export const SENSOR_CONFIGS = {
+  A: { ip: "192.168.1.7", port: 8234, name: "Sensor A" },
+  B: { ip: "192.168.1.8", port: 8234, name: "Sensor B" },
+  C: { ip: "192.168.1.9", port: 8234, name: "Sensor C" },
+};
+
+export const NAV_ITEMS = [
+  { id: "dashboard",      label: "Dashboard",     icon: "Dashboard", section: "main"  },
+  { id: "sensor-config",  label: "Sensor Config", icon: "Sensor",    section: "main"  },
+  { id: "run-mode",       label: "Run Mode",      icon: "Activity",  section: "main"  },
+  { id: "download",       label: "Download Data", icon: "Download",  section: "main"  },
+  { id: "backend",        label: "Backend",       icon: "Backend",   section: "admin" },
+];
+
+export const PAGE_LABELS = {
+  "dashboard":     "Dashboard",
+  "sensor-config": "Sensor Config",
+  "run-mode":      "Run Mode",
+  "download":      "Download Data",
+  "backend":       "Backend",
+};
