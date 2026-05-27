@@ -23,6 +23,8 @@ export default function App() {
   const [connected,  setConnected]  = useState(false);
   const [rows,       setRows]       = useState([]);
   const [streamRate, setStreamRate] = useState(null);
+  const [thicknessState, setThicknessState] = useState(null);
+  const [setupReadyBusy, setSetupReadyBusy] = useState(false);
 
   const socketRef       = useRef(null);
   const counterRef      = useRef(1);
@@ -31,6 +33,40 @@ export default function App() {
 
   function showToast(msg, type = "success") {
     setToast({ msg, type, key: Date.now() });
+  }
+
+  async function loadThicknessState() {
+    try {
+      const response = await fetch(`${SERVER}/thickness/state`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setThicknessState(data);
+    } catch {
+      // Keep the UI usable even if the thickness-state endpoint is unavailable.
+    }
+  }
+
+  async function handleSetupReady() {
+    setSetupReadyBusy(true);
+    try {
+      const response = await fetch(`${SERVER}/thickness/setup-ready`, {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        showToast(data?.error || "Unable to capture starting readings", "error");
+        return;
+      }
+
+      setThicknessState(data);
+      const warningText = data.warnings?.length ? ` ${data.warnings.join(" ")}` : "";
+      showToast(`${data.message}${warningText}`, data.warnings?.length ? "error" : "success");
+    } catch {
+      showToast("Unable to capture starting readings", "error");
+    } finally {
+      setSetupReadyBusy(false);
+    }
   }
 
   function connectSocket() {
@@ -99,10 +135,17 @@ export default function App() {
     setPage("dashboard");
     setRows([]);
     setStreamRate(null);
+    setThicknessState(null);
+    setSetupReadyBusy(false);
     dataBufferRef.current   = [];
     counterRef.current      = 1;
     lastReadingTime.current = null;
   }
+
+  useEffect(() => {
+    if (!user) return;
+    loadThicknessState();
+  }, [user]);
 
   useEffect(() => {
     return () => {
@@ -138,6 +181,9 @@ export default function App() {
               live={live}
               connected={connected}
               onToggle={handleToggle}
+              thicknessState={thicknessState}
+              onSetupReady={handleSetupReady}
+              setupReadyBusy={setupReadyBusy}
             />
           )}
           {page === "download" && (

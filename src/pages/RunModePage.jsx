@@ -4,12 +4,24 @@ import { ROLE_ACCESS } from "../constants/roles";
 import AccessDenied from "../components/AccessDenied";
 import { SERVER } from "../constants/config";
 
-export default function RunModePage({ user, rows, live, connected, onToggle }) {
+export default function RunModePage({
+  user,
+  rows,
+  live,
+  connected,
+  onToggle,
+  thicknessState,
+  onSetupReady,
+  setupReadyBusy,
+}) {
   if (!ROLE_ACCESS[user.role]?.includes("run-mode")) return <AccessDenied />;
 
   const [minLimit,    setMinLimit]    = useState("");
   const [maxLimit,    setMaxLimit]    = useState("");
   const [limitActive, setLimitActive] = useState(false);
+  const setupReady = Boolean(thicknessState?.setup_ready);
+  const referenceReadings = thicknessState?.reference_readings || {};
+  const capturedAt = thicknessState?.captured_at;
 
   const canvasA = useRef(null);
   const canvasB = useRef(null);
@@ -187,6 +199,76 @@ export default function RunModePage({ user, rows, live, connected, onToggle }) {
         </div>
       </div>
 
+        {/* SETUP READY */}
+        <div className="section">
+          <div className="section-header">
+            <span className="section-title">Is the setup ready?</span>
+            <span style={{ fontSize: 11, color: setupReady ? "var(--green)" : "var(--text-3)", fontFamily: "var(--mono)" }}>
+              {setupReady ? "Baseline captured" : "Waiting for confirmation"}
+            </span>
+          </div>
+          <div style={{
+            background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(34,197,94,0.06))",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--r2)",
+            padding: "16px 18px",
+            display: "flex",
+            gap: 16,
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+          }}>
+            <div style={{ minWidth: 240, flex: 1 }}>
+              <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 6, fontWeight: 600 }}>
+                Capture the starting readings once the object is in position.
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
+                The backend saves this baseline, then calculates thickness as starting reading minus the live reading for each sensor.
+              </div>
+              {setupReady && (
+                <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "var(--mono)" }}>
+                    Captured at {capturedAt ? new Date(capturedAt).toLocaleString() : "—"}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {Object.entries(referenceReadings).map(([sid, value]) => (
+                      <span
+                        key={sid}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          borderRadius: 999,
+                          padding: "6px 10px",
+                          background: "var(--bg3)",
+                          border: "1px solid var(--border)",
+                          fontFamily: "var(--mono)",
+                          fontSize: 12,
+                          color: "var(--text)",
+                        }}
+                      >
+                        Sensor {sid}: {value ?? "—"} mm
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
+              className={`btn ${setupReady ? "btn-outline" : "btn-green"}`}
+              onClick={onSetupReady}
+              disabled={setupReadyBusy}
+              style={{ minWidth: 220 }}
+            >
+              {setupReadyBusy
+                ? "Capturing starting readings..."
+                : setupReady
+                ? "Re-capture starting readings"
+                : "Yes, capture starting readings"}
+            </button>
+          </div>
+        </div>
+
       {/* THICKNESS LIMIT */}
       <div className="section">
         <div className="section-header">
@@ -262,7 +344,7 @@ export default function RunModePage({ user, rows, live, connected, onToggle }) {
               <div className="stat-val" style={{ fontSize: 28, color: getColor(v) }}>
                 {v ?? "—"}
               </div>
-              <div className="stat-sub">mm · latest reading</div>
+              <div className="stat-sub">mm · latest thickness</div>
             </div>
           );
         })}
@@ -271,7 +353,7 @@ export default function RunModePage({ user, rows, live, connected, onToggle }) {
       {/* LIVE GRAPHS */}
       <div className="section">
         <div className="section-header">
-          <span className="section-title">Live Graph — Last {WINDOW} Readings</span>
+          <span className="section-title">Live Graph — Last {WINDOW} Thickness Samples</span>
         </div>
         <div style={{
           display: "grid",
@@ -309,7 +391,7 @@ export default function RunModePage({ user, rows, live, connected, onToggle }) {
                     fontSize: 13, fontFamily: "var(--mono)",
                     fontWeight: 700, color: getColor(v),
                   }}>
-                    {v ?? "—"} mm
+                    {v ?? "—"} mm thickness
                   </span>
                 </div>
                 <canvas
@@ -340,7 +422,7 @@ export default function RunModePage({ user, rows, live, connected, onToggle }) {
             textAlign: "center", color: "var(--text-3)",
             fontFamily: "var(--mono)", fontSize: 13,
           }}>
-            No data yet — press "Start Live" to begin streaming
+            No thickness data yet — capture starting readings and press "Start Live" to begin streaming
           </div>
         ) : (
           <div className="table-wrap scroll-table">
@@ -349,9 +431,9 @@ export default function RunModePage({ user, rows, live, connected, onToggle }) {
                 <tr>
                   <th style={{ width: 60 }}>#</th>
                   <th>Timestamp</th>
-                  <th className="td-r">Sensor A (mm)</th>
-                  <th className="td-r">Sensor B (mm)</th>
-                  <th className="td-r">Sensor C (mm)</th>
+                  <th className="td-r">Sensor A Thickness (mm)</th>
+                  <th className="td-r">Sensor B Thickness (mm)</th>
+                  <th className="td-r">Sensor C Thickness (mm)</th>
                 </tr>
               </thead>
               <tbody>

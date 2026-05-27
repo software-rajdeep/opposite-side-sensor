@@ -9,13 +9,21 @@ export default function LoginPage({ onLogin }) {
   const [err,     setErr]     = useState("");
   const [loading, setLoading] = useState(false);
 
+  function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    return fetch(url, { ...options, signal: controller.signal })
+      .finally(() => clearTimeout(timeoutId));
+  }
+
   async function handleLogin() {
     if (!u || !p) { setErr("Please fill in both fields."); return; }
     setLoading(true);
     setErr("");
 
     try {
-      const res  = await fetch(`${SERVER}/login`, {
+      const res  = await fetchWithTimeout(`${SERVER}/login`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ username: u, password: p }),
@@ -28,7 +36,7 @@ export default function LoginPage({ onLogin }) {
         setErr(data.error || "Invalid username or password.");
       }
     } catch {
-      setErr("Network error — is backend running?");
+      setErr("Network error — check backend host and port.");
     }
 
     setLoading(false);
