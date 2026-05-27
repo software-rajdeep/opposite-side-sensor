@@ -23,5 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 AGENTS.md
-Desktop/
 Desktop (Copy 3)/
+backend/__pycache__/
+backend/*.pyc
+backend/thickness_state.json
