@@ -1,4 +1,26 @@
-export const SERVER = "http://192.168.1.2:5000";
+export const DEFAULT_SERVER =
+  import.meta.env.VITE_SERVER_URL || "http://192.168.1.2:5000";
+const STORAGE_KEY = "thicknessmon.server";
+
+export function getServerBase() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setServerBase(value) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, value);
+  } catch {
+    // Ignore storage errors to keep the UI responsive.
+  }
+}
+
+export const SERVER = getServerBase() || DEFAULT_SERVER;
 
 export const DEMO_ACCOUNTS = [
   { username: "superadmin", password: "superadmin123", role: "superadmin" },

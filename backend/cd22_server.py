@@ -19,11 +19,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # CONFIGURATION
 # ==========================================
 # --- NETWORK CONFIG ---
-SENSOR_CONFIGS = {
+DEFAULT_SENSOR_CONFIGS = {
     "A": {"ip": "192.168.1.7", "port": 8234, "name": "Sensor A"},
     "B": {"ip": "192.168.1.8", "port": 8234, "name": "Sensor B"},
     "C": {"ip": "192.168.1.9", "port": 8234, "name": "Sensor C"}
 }
+SENSOR_CONFIGS = {}
 
 SENSOR_TIMEOUT = 2.0
 SERVER_IP = '0.0.0.0'         
@@ -43,6 +44,7 @@ LIMIT_UNFILTERED = 1_000_000
 
 # --- FILE CONFIG ---
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "sensor_config.json")
+NETWORK_CONFIG_FILE_PATH = os.path.join(BASE_DIR, "sensor_network.json")
 THICKNESS_STATE_FILE_PATH = os.path.join(BASE_DIR, "thickness_state.json")
 
 # --- PROTOCOL CONSTANTS ---
@@ -84,6 +86,101 @@ def init_config_file():
         }
         with open(CONFIG_FILE_PATH, 'w') as f:
             json.dump(default_config, f, indent=4)
+
+def init_network_config_file():
+    if not os.path.exists(NETWORK_CONFIG_FILE_PATH):
+        with open(NETWORK_CONFIG_FILE_PATH, 'w') as file_handle:
+            json.dump(DEFAULT_SENSOR_CONFIGS, file_handle, indent=4)
+
+def normalize_network_config(payload, base_config=None):
+    base = base_config or DEFAULT_SENSOR_CONFIGS
+    normalized = {}
+    errors = []
+
+    if not isinstance(payload, dict):
+        return base.copy(), ["Payload must be a JSON object."]
+
+    for sid, defaults in base.items():
+        entry = payload.get(sid)
+        if entry is None:
+            entry = payload.get(sid.upper())
+        if entry is None:
+            entry = payload.get(sid.lower())
+
+        if entry is None:
+            normalized[sid] = defaults.copy()
+            continue
+
+        if not isinstance(entry, dict):
+            normalized[sid] = defaults.copy()
+            errors.append(f"Sensor {sid} config must be an object.")
+            continue
+
+        ip = str(entry.get("ip", defaults["ip"])).strip()
+        try:
+            port = int(entry.get("port", defaults["port"]))
+        except (TypeError, ValueError):
+            port = defaults["port"]
+            errors.append(f"Sensor {sid} port must be a number.")
+        name = str(entry.get("name", defaults["name"])).strip() or defaults["name"]
+
+        normalized[sid] = {"ip": ip, "port": port, "name": name}
+
+    return normalized, errors
+
+def load_network_config():
+    if not os.path.exists(NETWORK_CONFIG_FILE_PATH):
+        return DEFAULT_SENSOR_CONFIGS.copy()
+    try:
+        with open(NETWORK_CONFIG_FILE_PATH, 'r') as file_handle:
+            payload = json.load(file_handle)
+        normalized, _ = normalize_network_config(payload, DEFAULT_SENSOR_CONFIGS)
+        return normalized
+    except Exception:
+        return DEFAULT_SENSOR_CONFIGS.copy()
+
+def save_network_config(config):
+    with open(NETWORK_CONFIG_FILE_PATH, 'w') as file_handle:
+        json.dump(config, file_handle, indent=4)
+
+def rebuild_active_sensors():
+    global active_sensors_map
+    new_map = {}
+
+    for sid, config in SENSOR_CONFIGS.items():
+        print(f"Checking {config.get('name', f'Sensor {sid}')} at {config['ip']}...")
+        temp_sensor = CD22Sensor(config["ip"], config["port"], config.get("name", f"Sensor {sid}"))
+        connected = False
+        for _ in range(3):
+            if temp_sensor.connect():
+                connected = True
+                break
+            time.sleep(1)
+        if connected:
+            new_map[sid] = temp_sensor
+            print(f"  -> SUCCESS! Added {config.get('name', f'Sensor {sid}')} to active pool.")
+        else:
+            temp_sensor.disconnect()
+            print(f"  -> OFFLINE. Ignoring {config.get('name', f'Sensor {sid}')} for this session.")
+
+    with sensors_lock:
+        for sensor in active_sensors_map.values():
+            sensor.disconnect()
+        active_sensors_map = new_map
+
+    return list(new_map.keys())
+
+def refresh_sensor_configs(new_config=None):
+    global SENSOR_CONFIGS
+    if new_config is None:
+        SENSOR_CONFIGS = load_network_config()
+    else:
+        SENSOR_CONFIGS = new_config
+        save_network_config(SENSOR_CONFIGS)
+    return rebuild_active_sensors()
+
+init_network_config_file()
+SENSOR_CONFIGS = load_network_config()
 
 def default_thickness_state():
     return {
@@ -334,6 +431,7 @@ CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
 
 active_sensors_map = {}
+sensors_lock = threading.Lock()
 thickness_state = load_thickness_state()
 
 stream_state = {
@@ -508,6 +606,23 @@ def server_config():
         "db_name":           DB_NAME,
         "thickness_state":    get_thickness_state(),
     }), 200
+
+@app.route('/server/network', methods=['GET', 'POST'])
+def server_network():
+    if request.method == 'GET':
+        return jsonify(SENSOR_CONFIGS), 200
+
+    payload = request.json or {}
+    updated, errors = normalize_network_config(payload, SENSOR_CONFIGS)
+    if errors:
+        return jsonify({"error": "Invalid network config", "details": errors}), 400
+
+    active_ids = refresh_sensor_configs(updated)
+    return jsonify({
+        "message": "Network config updated",
+        "active_sensors": active_ids,
+        "sensor_configs": SENSOR_CONFIGS,
+    }), 200
 # ==========================================
 # WEBSOCKET & DB STREAMING
 # ==========================================
@@ -555,10 +670,16 @@ def background_stream_task():
             time.sleep(1)
             continue
 
+        with sensors_lock:
+            sensors_snapshot = dict(active_sensors_map)
+
+        if set(sensors_snapshot.keys()) != set(batches.keys()):
+            batches = {sid: batches.get(sid, []) for sid in sensors_snapshot.keys()}
+
         all_sensors_failed = True
         thickness_snapshot = {"A": None, "B": None, "C": None}
 
-        for sid, sensor in active_sensors_map.items():
+        for sid, sensor in sensors_snapshot.items():
             val = sensor.get_single_measurement()
             if val is not None:
                 thickness_value = calculate_thickness(sid, val)
@@ -584,7 +705,7 @@ def background_stream_task():
             payload = {"timestamp": datetime.datetime.now().isoformat()}
             has_data = False
             
-            for sid in active_sensors_map.keys():
+            for sid in sensors_snapshot.keys():
                 if batches[sid]:
                     payload[f"sensor_{sid}"] = round(calculate_filtered_average(batches[sid]), 3)
                     batches[sid] = []
@@ -647,26 +768,10 @@ if __name__ == '__main__':
     init_db()
     init_config_file()
     init_thickness_state_file()
+    init_network_config_file()
 
     print("Detecting hardware configuration...")
-    for sid, config in SENSOR_CONFIGS.items():
-        print(f"Checking {config['name']} at {config['ip']}...")
-        temp_sensor = CD22Sensor(config["ip"], config["port"], config["name"])
-        
-        connected = False
-
-        for attempt in range(10):
-            print(f"Attempt {attempt+1} to connect {config['name']}...")
-
-            if temp_sensor.connect():
-                connected = True               
-                break
-            time.sleep(3)
-        if connected:
-            active_sensors_map[sid] = temp_sensor
-            print(f"  -> SUCCESS! Added {config['name']} to active pool.")
-        else:
-            print(f"  -> OFFLINE. Ignoring {config['name']} for this session.")
+    refresh_sensor_configs()
     
     print("==================================================")
     print(f"Active Sensors: {list(active_sensors_map.keys())}")

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Ic } from "../icons/Icons";
 import { ROLE_ACCESS } from "../constants/roles";
 import AccessDenied from "../components/AccessDenied";
-import { SERVER } from "../constants/config";
+import { SERVER, SENSOR_CONFIGS } from "../constants/config";
 
 export default function RunModePage({
   user,
@@ -22,6 +22,8 @@ export default function RunModePage({
   const setupReady = Boolean(thicknessState?.setup_ready);
   const referenceReadings = thicknessState?.reference_readings || {};
   const capturedAt = thicknessState?.captured_at;
+  const sensorOrder = Object.keys(SENSOR_CONFIGS);
+  const sensorKeys = { A: "a", B: "b", C: "c" };
 
   const canvasA = useRef(null);
   const canvasB = useRef(null);
@@ -147,10 +149,12 @@ export default function RunModePage({
   }
 
   useEffect(() => {
-    drawGraph(canvasA.current, "a");
-    drawGraph(canvasB.current, "b");
-    drawGraph(canvasC.current, "c");
-  }, [rows, limitActive, minLimit, maxLimit]);
+    const canvasMap = { A: canvasA, B: canvasB, C: canvasC };
+    sensorOrder.forEach((sid) => {
+      const key = sensorKeys[sid];
+      if (key) drawGraph(canvasMap[sid]?.current, key);
+    });
+  }, [rows, limitActive, minLimit, maxLimit, sensorOrder]);
 
   const latest = rows[0];
 
@@ -328,10 +332,10 @@ export default function RunModePage({
 
       {/* STAT CARDS */}
       <div className="stats-grid">
-        {["a", "b", "c"].map((key, i) => {
-          const sid    = ["A", "B", "C"][i];
-          const v      = latest?.[key];
-          const online = isOnline(key);
+        {sensorOrder.map((sid) => {
+          const key = sensorKeys[sid];
+          const v = key ? latest?.[key] : undefined;
+          const online = key ? isOnline(key) : false;
           return (
             <div key={sid} className="stat-card">
               <div className="stat-label">
@@ -360,13 +364,12 @@ export default function RunModePage({
           gridTemplateColumns: "repeat(auto-fit, minmax(280px,1fr))",
           gap: 14,
         }}>
-          {[
-            { ref: canvasA, label: "Sensor A", key: "a" },
-            { ref: canvasB, label: "Sensor B", key: "b" },
-            { ref: canvasC, label: "Sensor C", key: "c" },
-          ].map(({ ref, label, key }) => {
-            const v      = latest?.[key];
-            const online = isOnline(key);
+          {sensorOrder.map((sid) => {
+            const key = sensorKeys[sid];
+            const v = key ? latest?.[key] : undefined;
+            const online = key ? isOnline(key) : false;
+            const ref = sid === "A" ? canvasA : sid === "B" ? canvasB : canvasC;
+            const label = `Sensor ${sid}`;
             return (
               <div key={label} style={{
                 background: "var(--bg2)", border: "1px solid var(--border)",
@@ -431,9 +434,9 @@ export default function RunModePage({
                 <tr>
                   <th style={{ width: 60 }}>#</th>
                   <th>Timestamp</th>
-                  <th className="td-r">Sensor A Thickness (mm)</th>
-                  <th className="td-r">Sensor B Thickness (mm)</th>
-                  <th className="td-r">Sensor C Thickness (mm)</th>
+                  {sensorOrder.map((sid) => (
+                    <th key={sid} className="td-r">Sensor {sid} Thickness (mm)</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -441,9 +444,11 @@ export default function RunModePage({
                   <tr key={r.id}>
                     <td className="td-mono td-dim">{r.id}</td>
                     <td className="td-mono td-dim" style={{ fontSize: 11 }}>{r.ts}</td>
-                    <td className="td-mono td-r">{fmtVal(r.a)}</td>
-                    <td className="td-mono td-r">{fmtVal(r.b)}</td>
-                    <td className="td-mono td-r">{fmtVal(r.c)}</td>
+                    {sensorOrder.map((sid) => (
+                      <td key={sid} className="td-mono td-r">
+                        {fmtVal(r[sensorKeys[sid]])}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

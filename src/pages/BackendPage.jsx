@@ -3,7 +3,7 @@ import { Ic } from "../icons/Icons";
 import { ROLE_ACCESS, ROLE_COLOR } from "../constants/roles";
 import AccessDenied from "../components/AccessDenied";
 import Spinner from "../components/Spinner";
-import { SERVER } from "../constants/config";
+import { SERVER, DEFAULT_SERVER, setServerBase } from "../constants/config";
 
 export default function BackendPage({ user }) {
   if (!ROLE_ACCESS[user.role]?.includes("backend")) return <AccessDenied />;
@@ -18,10 +18,29 @@ export default function BackendPage({ user }) {
   const [adding,     setAdding]     = useState(false);
   const [deleting,   setDeleting]   = useState(null);
   const [toast,      setToast]      = useState(null);
+  const [apiBase,    setApiBase]    = useState(() => SERVER);
 
   function showToast(msg, type = "success") {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  function handleApiSave() {
+    const next = apiBase.trim();
+    if (!next) {
+      showToast("Server URL is required", "error");
+      return;
+    }
+    setServerBase(next);
+    showToast("Server updated. Reloading…", "success");
+    setTimeout(() => window.location.reload(), 600);
+  }
+
+  function handleApiReset() {
+    setApiBase(DEFAULT_SERVER);
+    setServerBase(DEFAULT_SERVER);
+    showToast("Server reset to default. Reloading…", "success");
+    setTimeout(() => window.location.reload(), 600);
   }
 
   async function fetchUsers() {
@@ -312,6 +331,44 @@ export default function BackendPage({ user }) {
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* API CONNECTION */}
+      <div className="section">
+        <div className="section-header">
+          <span className="section-title">API Connection</span>
+        </div>
+        <div style={{
+          background: "var(--bg2)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--r2)",
+          padding: "16px 18px",
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "flex-end",
+        }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 5, fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: "0.8px" }}>
+              Backend URL
+            </div>
+            <input
+              className="form-input"
+              value={apiBase}
+              onChange={e => setApiBase(e.target.value)}
+              placeholder={DEFAULT_SERVER}
+            />
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6, fontFamily: "var(--mono)" }}>
+              Example: http://192.168.1.2:5000
+            </div>
+          </div>
+          <button className="btn btn-blue" onClick={handleApiSave}>
+            <Ic.Check /> Save URL
+          </button>
+          <button className="btn btn-outline" onClick={handleApiReset}>
+            Reset
+          </button>
         </div>
       </div>
 
