@@ -1,5 +1,5 @@
-export const DEFAULT_SERVER =
-  import.meta.env.VITE_SERVER_URL || "http://192.168.1.2:5000";
+export const DEFAULT_SERVER = 
+  import.meta.env.VITE_SERVER_URL || window.location.origin;
 const STORAGE_KEY = "thicknessmon.server";
 
 export function getServerBase() {

@@ -9,7 +9,7 @@ import csv
 import io
 from psycopg2 import extras
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_socketio import SocketIO
 from flask import Response
@@ -501,6 +501,14 @@ def thickness_setup_ready():
 # ==========================================
 # APIS - AUTHENTICATION
 # ==========================================
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react_app(path):
+    dist_dir = '/home/linux/final_webapp/dist'
+    if path and os.path.exists(os.path.join(dist_dir, path)):
+        return send_from_directory(dist_dir, path)
+    return send_from_directory(dist_dir, 'index.html')
+
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
