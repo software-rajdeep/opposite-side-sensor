@@ -186,8 +186,24 @@ def default_thickness_state():
     return {
         "setup_ready": False,
         "captured_at": None,
-        "reference_readings": {"A": None, "B": None, "C": None}
+        "reference_readings": {"A": None, "B": None, "C": None},
+        "calibration_completed": False,
+        "calibration_active": False,
+        "calibration_captured_at": None,
+        "calibration_reference_thickness": 0.0,
+        "calibration_baseline_readings": {"A": None, "B": None, "C": None}
     }
+
+def normalize_sensor_readings(raw_readings):
+    normalized = {"A": None, "B": None, "C": None}
+    if not isinstance(raw_readings, dict):
+        return normalized
+
+    for sensor_id in normalized.keys():
+        value = raw_readings.get(sensor_id)
+        normalized[sensor_id] = float(value) if value is not None else None
+
+    return normalized
 
 def load_thickness_state():
     if not os.path.exists(THICKNESS_STATE_FILE_PATH):
@@ -202,11 +218,22 @@ def load_thickness_state():
     state = default_thickness_state()
     state["setup_ready"] = bool(loaded_state.get("setup_ready", False))
     state["captured_at"] = loaded_state.get("captured_at")
+    state["calibration_completed"] = bool(
+        loaded_state.get("calibration_completed", loaded_state.get("calibration_active", False))
+    )
+    state["calibration_active"] = state["calibration_completed"]
+    state["calibration_captured_at"] = loaded_state.get("calibration_captured_at")
 
-    loaded_references = loaded_state.get("reference_readings", {}) or {}
-    for sensor_id in state["reference_readings"].keys():
-        value = loaded_references.get(sensor_id)
-        state["reference_readings"][sensor_id] = float(value) if value is not None else None
+    reference_thickness = loaded_state.get("calibration_reference_thickness", 0.0)
+    try:
+        state["calibration_reference_thickness"] = float(reference_thickness)
+    except (TypeError, ValueError):
+        state["calibration_reference_thickness"] = 0.0
+
+    state["reference_readings"] = normalize_sensor_readings(loaded_state.get("reference_readings", {}))
+    state["calibration_baseline_readings"] = normalize_sensor_readings(
+        loaded_state.get("calibration_baseline_readings", {})
+    )
 
     return state
 
@@ -227,15 +254,7 @@ def set_thickness_state(new_state):
     save_thickness_state(thickness_state)
 
 def capture_starting_readings():
-    captured_readings = {}
-    failures = []
-
-    for sensor_id, sensor in active_sensors_map.items():
-        reading = sensor.get_single_measurement()
-        if reading is None:
-            failures.append(sensor_id)
-            continue
-        captured_readings[sensor_id] = round(float(reading), 3)
+    captured_readings, failures = capture_active_sensor_readings()
 
     if not captured_readings:
         return None, failures
@@ -249,8 +268,66 @@ def capture_starting_readings():
     set_thickness_state(updated_state)
     return captured_readings, failures
 
+def capture_active_sensor_readings():
+    captured_readings = {}
+    failures = []
+
+    for sensor_id, sensor in active_sensors_map.items():
+        reading = sensor.get_single_measurement()
+        if reading is None:
+            failures.append(sensor_id)
+            continue
+        captured_readings[sensor_id] = round(float(reading), 3)
+
+    return captured_readings, failures
+
+def capture_calibration(reference_thickness):
+    captured_readings, failures = capture_active_sensor_readings()
+
+    if not captured_readings:
+        return None, failures
+
+    current_state = get_thickness_state()
+    updated_state = default_thickness_state()
+    updated_state["setup_ready"] = current_state.get("setup_ready", False)
+    updated_state["captured_at"] = current_state.get("captured_at")
+    updated_state["reference_readings"] = normalize_sensor_readings(current_state.get("reference_readings", {}))
+    updated_state["calibration_completed"] = True
+    updated_state["calibration_active"] = True
+    updated_state["calibration_captured_at"] = datetime.datetime.now().isoformat()
+    updated_state["calibration_reference_thickness"] = round(float(reference_thickness), 3)
+    for sensor_id, reading in captured_readings.items():
+        updated_state["calibration_baseline_readings"][sensor_id] = reading
+
+    set_thickness_state(updated_state)
+    return captured_readings, failures
+
+def reset_calibration_state():
+    updated_state = get_thickness_state().copy()
+    updated_state["calibration_completed"] = False
+    updated_state["calibration_active"] = False
+    updated_state["calibration_captured_at"] = None
+    updated_state["calibration_reference_thickness"] = 0.0
+    updated_state["calibration_baseline_readings"] = {"A": None, "B": None, "C": None}
+    set_thickness_state(updated_state)
+    return updated_state
+
 def calculate_thickness(sensor_id, current_reading):
-    reference_reading = get_thickness_state()["reference_readings"].get(sensor_id)
+    state = get_thickness_state()
+
+    if state.get("calibration_completed"):
+        baseline_reading = state.get("calibration_baseline_readings", {}).get(sensor_id)
+        reference_thickness = state.get("calibration_reference_thickness", 0.0)
+        if baseline_reading is None:
+            return round(float(reference_thickness), 3)
+        # The raw sensor value is a distance reading: when the object gets closer
+        # or thicker, the reading goes down. Convert that inverse movement into a
+        # thickness delta so the displayed value changes in the same direction as
+        # the actual object thickness.
+        thickness = float(reference_thickness) + (float(baseline_reading) - float(current_reading))
+        return round(thickness, 3)
+
+    reference_reading = state["reference_readings"].get(sensor_id)
     if reference_reading is None:
         return round(float(current_reading), 3)
     thickness = float(reference_reading) - float(current_reading)
@@ -497,6 +574,48 @@ def thickness_setup_ready():
         response_payload["warnings"] = [f"Sensor {sensor_id} did not return a reading." for sensor_id in failures]
 
     return jsonify(response_payload), 200
+
+@app.route('/thickness/calibration', methods=['POST'])
+def thickness_calibration():
+    if not active_sensors_map:
+        return jsonify({"error": "No active sensors available."}), 400
+
+    data = request.json or {}
+    try:
+        reference_thickness = float(data.get("reference_thickness"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid reference thickness is required."}), 400
+
+    if reference_thickness < 0:
+        return jsonify({"error": "Reference thickness must be zero or greater."}), 400
+
+    captured_readings, failures = capture_calibration(reference_thickness)
+    if not captured_readings:
+        return jsonify({"error": "Unable to capture calibration readings."}), 500
+
+    response_payload = {
+        "message": "Calibration saved successfully.",
+        "calibration_active": True,
+        "calibration_captured_at": get_thickness_state().get("calibration_captured_at"),
+        "calibration_reference_thickness": get_thickness_state().get("calibration_reference_thickness", 0.0),
+        "calibration_baseline_readings": get_thickness_state().get("calibration_baseline_readings", {}),
+        "captured_readings": captured_readings,
+    }
+    if failures:
+        response_payload["warnings"] = [f"Sensor {sensor_id} did not return a reading." for sensor_id in failures]
+
+    return jsonify(response_payload), 200
+
+@app.route('/thickness/calibration/reset', methods=['POST'])
+def thickness_calibration_reset():
+    updated_state = reset_calibration_state()
+    return jsonify({
+        "message": "Calibration reset successfully.",
+        "calibration_active": updated_state.get("calibration_active", False),
+        "calibration_reference_thickness": updated_state.get("calibration_reference_thickness", 0.0),
+        "calibration_baseline_readings": updated_state.get("calibration_baseline_readings", {}),
+        "calibration_captured_at": updated_state.get("calibration_captured_at"),
+    }), 200
 
 # ==========================================
 # APIS - AUTHENTICATION

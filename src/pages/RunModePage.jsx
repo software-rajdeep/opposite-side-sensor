@@ -11,17 +11,26 @@ export default function RunModePage({
   connected,
   onToggle,
   thicknessState,
-  onSetupReady,
-  setupReadyBusy,
+  onApplyCalibration,
+  onResetCalibration,
+  calibrationBusy,
+  runModeVisitKey,
 }) {
   if (!ROLE_ACCESS[user.role]?.includes("run-mode")) return <AccessDenied />;
 
   const [minLimit,    setMinLimit]    = useState("");
   const [maxLimit,    setMaxLimit]    = useState("");
   const [limitActive, setLimitActive] = useState(false);
-  const setupReady = Boolean(thicknessState?.setup_ready);
-  const referenceReadings = thicknessState?.reference_readings || {};
-  const capturedAt = thicknessState?.captured_at;
+  const [calibrationStep, setCalibrationStep] = useState("none");
+  const [calibrationValue, setCalibrationValue] = useState("");
+  const [calibrationError, setCalibrationError] = useState("");
+  const calibrationActive = Boolean(thicknessState?.calibration_active);
+  const calibrationReferenceThickness = thicknessState?.calibration_reference_thickness ?? 0;
+  const calibrationCapturedAt = thicknessState?.calibration_captured_at;
+  const calibrationBaselines = thicknessState?.calibration_baseline_readings || {};
+  const [localCalibrated, setLocalCalibrated] = useState(false);
+  // If local storage indicates calibrated, respect that even if server refresh hasn't arrived yet
+  const isCalibrated = calibrationActive || localCalibrated || Boolean(thicknessState?.calibration_completed);
   const sensorOrder = Object.keys(SENSOR_CONFIGS);
   const sensorKeys = { A: "a", B: "b", C: "c" };
 
@@ -30,6 +39,62 @@ export default function RunModePage({
   const canvasC = useRef(null);
 
   const WINDOW = 100;
+
+  useEffect(() => {
+    if (!calibrationActive) {
+      setCalibrationStep("input");
+      setCalibrationValue("");
+      setCalibrationError("");
+    }
+  }, [runModeVisitKey]);
+
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem("thicknessmon.calibrated");
+      setLocalCalibrated(Boolean(v));
+    } catch {
+      setLocalCalibrated(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isCalibrated) {
+      setCalibrationStep("none");
+      setCalibrationValue("");
+      setCalibrationError("");
+    }
+  }, [isCalibrated]);
+
+  function formatThickness(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return "0";
+    return numericValue.toFixed(3).replace(/\.0+$/, "").replace(/(\.[0-9]*?)0+$/, "$1");
+  }
+
+  function closeCalibrationDialog() {
+    setCalibrationStep("none");
+    setCalibrationValue("");
+    setCalibrationError("");
+  }
+
+  function openCalibrationDialog() {
+    setCalibrationStep("input");
+    setCalibrationValue("");
+    setCalibrationError("");
+  }
+
+  async function submitCalibration() {
+    const parsed = Number(calibrationValue);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setCalibrationError("Enter a valid thickness value in mm.");
+      return;
+    }
+
+    const success = await onApplyCalibration(parsed);
+    if (success) {
+      closeCalibrationDialog();
+    }
+  }
 
   function getColor(v) {
     if (v === null || v === undefined) return "var(--text-3)";
@@ -160,8 +225,47 @@ export default function RunModePage({
 
   return (
     <div className="fade-up" style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      {calibrationStep !== "none" && (
+        <div className="dialog-overlay" role="presentation">
+          <div className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="calibration-dialog-title">
+            {calibrationStep === "input" && (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitCalibration();
+                }}
+              >
+                <div className="dialog-title" id="calibration-dialog-title">Thickness Calibration</div>
+                <div className="dialog-text">
+                  <strong>Note:</strong>
+                  <br />
+                  Place the reference object in front of the sensor.
+                  <br />
+                  Enter its actual thickness in millimeters.
+                </div>
+                <input
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  className="form-input dialog-input"
+                  placeholder="Enter thickness in mm"
+                  value={calibrationValue}
+                  onChange={(event) => setCalibrationValue(event.target.value)}
+                  autoFocus
+                />
+                {calibrationError && <div className="dialog-error">{calibrationError}</div>}
+                <div className="dialog-actions">
+                  <button type="button" className="btn btn-outline" onClick={closeCalibrationDialog} disabled={calibrationBusy}>Cancel</button>
+                  <button type="submit" className="btn btn-green" disabled={calibrationBusy}>
+                    {calibrationBusy ? "Saving..." : "Submit"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* PAGE HEADER */}
       <div className="page-header">
         <div className="page-header-row">
           <div>
@@ -169,150 +273,138 @@ export default function RunModePage({
             <div className="page-sub">REAL-TIME THICKNESS · mm</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {live && connected && (
-              <div className="live-dot"><div className="dot" /> LIVE</div>
-            )}
-            <button
-              className={`btn ${live ? "btn-red" : "btn-green"}`}
-              onClick={onToggle}
-            >
+            {live && connected && <div className="live-dot"><div className="dot" /> LIVE</div>}
+            <button className={`btn ${live ? "btn-red" : "btn-green"}`} onClick={onToggle}>
               {live ? <><Ic.X /> Stop</> : <><Ic.Refresh /> Start Live</>}
             </button>
           </div>
         </div>
       </div>
 
-      {/* CONNECTION STATUS */}
       <div style={{ padding: "0 32px", marginBottom: 16 }}>
         <div style={{
-          display: "inline-flex", alignItems: "center", gap: 8,
-          background:   connected ? "var(--green-ghost)" : "var(--bg2)",
-          border:       `1px solid ${connected ? "rgba(34,197,94,0.3)" : "var(--border)"}`,
-          borderRadius: "var(--r)", padding: "6px 12px",
-          fontSize: 12, fontFamily: "var(--mono)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          background: connected ? "var(--green-ghost)" : "var(--bg2)",
+          border: `1px solid ${connected ? "rgba(34,197,94,0.3)" : "var(--border)"}`,
+          borderRadius: "var(--r)",
+          padding: "6px 12px",
+          fontSize: 12,
+          fontFamily: "var(--mono)",
           color: connected ? "var(--green)" : "var(--text-3)",
         }}>
           <span style={{
-            width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            flexShrink: 0,
             background: connected ? "var(--green)" : "var(--text-3)",
           }} />
-          {connected
-            ? `Connected · ${SERVER}`
-            : `Disconnected · Press "Start Live" to connect`
-          }
+          {connected ? `Connected · ${SERVER}` : `Disconnected · Press "Start Live" to connect`}
         </div>
       </div>
 
-        {/* SETUP READY */}
-        <div className="section">
-          <div className="section-header">
-            <span className="section-title">Is the setup ready?</span>
-            <span style={{ fontSize: 11, color: setupReady ? "var(--green)" : "var(--text-3)", fontFamily: "var(--mono)" }}>
-              {setupReady ? "Baseline captured" : "Waiting for confirmation"}
-            </span>
-          </div>
-          <div style={{
-            background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(34,197,94,0.06))",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--r2)",
-            padding: "16px 18px",
-            display: "flex",
-            gap: 16,
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-          }}>
-            <div style={{ minWidth: 240, flex: 1 }}>
-              <div style={{ fontSize: 13, color: "var(--text)", marginBottom: 6, fontWeight: 600 }}>
-                Capture the starting readings once the object is in position.
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
-                The backend saves this baseline, then calculates thickness as starting reading minus the live reading for each sensor.
-              </div>
-              {setupReady && (
-                <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "var(--mono)" }}>
-                    Captured at {capturedAt ? new Date(capturedAt).toLocaleString() : "—"}
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {Object.entries(referenceReadings).map(([sid, value]) => (
-                      <span
-                        key={sid}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          borderRadius: 999,
-                          padding: "6px 10px",
-                          background: "var(--bg3)",
-                          border: "1px solid var(--border)",
-                          fontFamily: "var(--mono)",
-                          fontSize: 12,
-                          color: "var(--text)",
-                        }}
-                      >
-                        Sensor {sid}: {value ?? "—"} mm
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <button
-              className={`btn ${setupReady ? "btn-outline" : "btn-green"}`}
-              onClick={onSetupReady}
-              disabled={setupReadyBusy}
-              style={{ minWidth: 220 }}
-            >
-              {setupReadyBusy
-                ? "Capturing starting readings..."
-                : setupReady
-                ? "Re-capture starting readings"
-                : "Yes, capture starting readings"}
-            </button>
-          </div>
+      <div className="section">
+        <div className="section-header">
+          <span className="section-title">Calibration Status</span>
+          <button
+            className="btn btn-sm btn-outline"
+            onClick={async () => {
+              const resetOk = await onResetCalibration();
+              if (resetOk) {
+                openCalibrationDialog();
+              }
+            }}
+            disabled={calibrationBusy}
+          >
+            Reset Calibration
+          </button>
         </div>
+        <div style={{
+          background: "linear-gradient(135deg, rgba(59,130,246,0.08), rgba(34,197,94,0.06))",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--r2)",
+          padding: "16px 18px",
+          display: "grid",
+          gap: 10,
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
+            {calibrationActive
+              ? `Calibrated: ${formatThickness(calibrationReferenceThickness)} mm`
+              : "Not Calibrated (0 mm)"}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
+            {calibrationActive
+              ? `Baseline captured at ${calibrationCapturedAt ? new Date(calibrationCapturedAt).toLocaleString() : "—"}. The displayed thickness is offset from that captured reading.`
+              : "Use calibration to offset the live display from a known reference thickness."}
+          </div>
+          {calibrationActive && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Object.entries(calibrationBaselines).map(([sid, value]) => (
+                <span
+                  key={sid}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    borderRadius: 999,
+                    padding: "6px 10px",
+                    background: "var(--bg3)",
+                    border: "1px solid var(--border)",
+                    fontFamily: "var(--mono)",
+                    fontSize: 12,
+                    color: "var(--text)",
+                  }}
+                >
+                  Sensor {sid}: {value ?? "—"} mm
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* THICKNESS LIMIT */}
       <div className="section">
         <div className="section-header">
           <span className="section-title">Thickness Limit</span>
           <button
             className={`btn btn-sm ${limitActive ? "btn-red" : "btn-outline"}`}
-            onClick={() => setLimitActive(l => !l)}
+            onClick={() => setLimitActive((current) => !current)}
           >
             {limitActive ? "Disable Limit" : "Enable Limit"}
           </button>
         </div>
         <div style={{
-          background: "var(--bg2)", border: "1px solid var(--border)",
-          borderRadius: "var(--r2)", padding: "16px 18px",
-          display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap",
+          background: "var(--bg2)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--r2)",
+          padding: "16px 18px",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          flexWrap: "wrap",
         }}>
           <div>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 5, fontFamily: "var(--mono)" }}>
-              MIN (mm)
-            </div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 5, fontFamily: "var(--mono)" }}>MIN (mm)</div>
             <input
               type="number"
               className="form-input"
               placeholder="e.g. 4"
               value={minLimit}
-              onChange={e => setMinLimit(e.target.value)}
+              onChange={(event) => setMinLimit(event.target.value)}
               style={{ width: 100, fontFamily: "var(--mono)" }}
             />
           </div>
           <div style={{ color: "var(--text-3)", fontSize: 18, marginTop: 16 }}>—</div>
           <div>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 5, fontFamily: "var(--mono)" }}>
-              MAX (mm)
-            </div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 5, fontFamily: "var(--mono)" }}>MAX (mm)</div>
             <input
               type="number"
               className="form-input"
               placeholder="e.g. 8"
               value={maxLimit}
-              onChange={e => setMaxLimit(e.target.value)}
+              onChange={(event) => setMaxLimit(event.target.value)}
               style={{ width: 100, fontFamily: "var(--mono)" }}
             />
           </div>
@@ -321,8 +413,11 @@ export default function RunModePage({
               marginLeft: "auto",
               background: "var(--blue-ghost)",
               border: "1px solid rgba(59,130,246,0.2)",
-              borderRadius: "var(--r)", padding: "8px 14px",
-              fontSize: 12, fontFamily: "var(--mono)", color: "var(--blue)",
+              borderRadius: "var(--r)",
+              padding: "8px 14px",
+              fontSize: 12,
+              fontFamily: "var(--mono)",
+              color: "var(--blue)",
             }}>
               Active: {minLimit || "—"} mm → {maxLimit || "—"} mm
             </div>
@@ -330,23 +425,19 @@ export default function RunModePage({
         </div>
       </div>
 
-      {/* STAT CARDS */}
       <div className="stats-grid">
         {sensorOrder.map((sid) => {
           const key = sensorKeys[sid];
-          const v = key ? latest?.[key] : undefined;
+          const value = key ? latest?.[key] : undefined;
           const online = key ? isOnline(key) : false;
           return (
             <div key={sid} className="stat-card">
               <div className="stat-label">
-                <span
-                  className={`s-dot ${connected && online ? "on" : "off"}`}
-                  style={{ display: "inline-block" }}
-                />
+                <span className={`s-dot ${connected && online ? "on" : "off"}`} style={{ display: "inline-block" }} />
                 &nbsp;Sensor {sid}
               </div>
-              <div className="stat-val" style={{ fontSize: 28, color: getColor(v) }}>
-                {v ?? "—"}
+              <div className="stat-val" style={{ fontSize: 28, color: getColor(value) }}>
+                {value ?? "—"}
               </div>
               <div className="stat-sub">mm · latest thickness</div>
             </div>
@@ -354,7 +445,6 @@ export default function RunModePage({
         })}
       </div>
 
-      {/* LIVE GRAPHS */}
       <div className="section">
         <div className="section-header">
           <span className="section-title">Live Graph — Last {WINDOW} Thickness Samples</span>
@@ -456,7 +546,6 @@ export default function RunModePage({
           </div>
         )}
       </div>
-
     </div>
   );
 }
