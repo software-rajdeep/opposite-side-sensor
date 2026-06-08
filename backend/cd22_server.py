@@ -21,8 +21,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # --- NETWORK CONFIG ---
 DEFAULT_SENSOR_CONFIGS = {
     "A": {"ip": "192.168.1.7", "port": 8234, "name": "Sensor A"},
-    "B": {"ip": "192.168.1.8", "port": 8234, "name": "Sensor B"},
-    "C": {"ip": "192.168.1.9", "port": 8234, "name": "Sensor C"}
+    "B": {"ip": "192.168.1.8", "port": 8234, "name": "Sensor B"}
 }
 SENSOR_CONFIGS = {}
 
@@ -52,6 +51,12 @@ STX = 0x02
 ETX = 0x03
 CMD_READ    = 0x52  
 CMD_WRITE   = 0x57  
+
+# --- SENSOR ZERO OFFSET ---
+# The CD22 sensor reads 0 when the object is at 35mm distance.
+# To get actual distance: actual_mm = ZERO_OFFSET_MM + sensor_reading
+# Example: reading=5 means 40mm, reading=-5 means 30mm
+ZERO_OFFSET_MM = 35.0
 
 # ==========================================
 # FILE INITIALIZATION
@@ -186,16 +191,17 @@ def default_thickness_state():
     return {
         "setup_ready": False,
         "captured_at": None,
-        "reference_readings": {"A": None, "B": None, "C": None},
+        "reference_readings": {"A": None, "B": None},
         "calibration_completed": False,
         "calibration_active": False,
         "calibration_captured_at": None,
         "calibration_reference_thickness": 0.0,
-        "calibration_baseline_readings": {"A": None, "B": None, "C": None}
+        "calibration_baseline_readings": {"A": None, "B": None},
+        "gap_distance": 0.0
     }
 
 def normalize_sensor_readings(raw_readings):
-    normalized = {"A": None, "B": None, "C": None}
+    normalized = {"A": None, "B": None}
     if not isinstance(raw_readings, dict):
         return normalized
 
@@ -229,6 +235,12 @@ def load_thickness_state():
         state["calibration_reference_thickness"] = float(reference_thickness)
     except (TypeError, ValueError):
         state["calibration_reference_thickness"] = 0.0
+
+    gap_distance = loaded_state.get("gap_distance", 0.0)
+    try:
+        state["gap_distance"] = float(gap_distance)
+    except (TypeError, ValueError):
+        state["gap_distance"] = 0.0
 
     state["reference_readings"] = normalize_sensor_readings(loaded_state.get("reference_readings", {}))
     state["calibration_baseline_readings"] = normalize_sensor_readings(
@@ -308,9 +320,40 @@ def reset_calibration_state():
     updated_state["calibration_active"] = False
     updated_state["calibration_captured_at"] = None
     updated_state["calibration_reference_thickness"] = 0.0
-    updated_state["calibration_baseline_readings"] = {"A": None, "B": None, "C": None}
+    updated_state["calibration_baseline_readings"] = {"A": None, "B": None}
+    updated_state["gap_distance"] = 0.0
     set_thickness_state(updated_state)
     return updated_state
+
+def calculate_opposite_thickness(dist_A, dist_B):
+    """Calculate thickness when sensors are on opposite sides.
+    
+    Each CD22 sensor reading is relative to a zero offset of ZERO_OFFSET_MM (35mm).
+    The actual distance from the sensor face to the object surface is:
+        actual_distance = ZERO_OFFSET_MM + sensor_reading
+    
+    Since sensors are placed opposite each other with the object in between:
+        Thickness = Total_Gap - actual_distance_A - actual_distance_B
+                  = Total_Gap - (ZERO_OFFSET_MM + dist_A) - (ZERO_OFFSET_MM + dist_B)
+                  = Total_Gap - 2*ZERO_OFFSET_MM - dist_A - dist_B
+    
+    Example: gap=100mm, dist_A=5 (→40mm), dist_B=-3 (→32mm)
+             thickness = 100 - 40 - 32 = 28mm
+    """
+    state = get_thickness_state()
+    gap = state.get("gap_distance", 0.0)
+    if gap <= 0:
+        return None
+    if dist_A is None or dist_B is None:
+        return None
+    
+    # Convert raw sensor readings to actual distances from sensor face to object surface
+    actual_dist_A = ZERO_OFFSET_MM + float(dist_A)
+    actual_dist_B = ZERO_OFFSET_MM + float(dist_B)
+    
+    # Thickness = gap minus distances from both sensors to object surfaces
+    thickness = gap - actual_dist_A - actual_dist_B
+    return round(thickness, 3)
 
 def calculate_thickness(sensor_id, current_reading):
     state = get_thickness_state()
@@ -348,7 +391,8 @@ def init_db():
                     timestamp TIMESTAMP,
                     sensor_a REAL,
                     sensor_b REAL,
-                    sensor_c REAL
+                    sensor_c REAL,
+                    thickness REAL
                 )
             """)
             
@@ -606,6 +650,30 @@ def thickness_calibration():
 
     return jsonify(response_payload), 200
 
+@app.route('/thickness/gap', methods=['POST'])
+def thickness_gap_set():
+    """Set the distance between the two sensor faces (total gap)."""
+    data = request.json or {}
+    try:
+        gap_distance = float(data.get("gap_distance"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid gap distance is required."}), 400
+
+    if gap_distance <= 0:
+        return jsonify({"error": "Gap distance must be greater than zero."}), 400
+
+    current_state = get_thickness_state()
+    current_state["gap_distance"] = round(gap_distance, 3)
+    current_state["calibration_completed"] = True
+    current_state["calibration_active"] = True
+    set_thickness_state(current_state)
+
+    return jsonify({
+        "message": "Gap distance set successfully.",
+        "gap_distance": current_state["gap_distance"],
+        "calibration_active": True
+    }), 200
+
 @app.route('/thickness/calibration/reset', methods=['POST'])
 def thickness_calibration_reset():
     updated_state = reset_calibration_state()
@@ -623,7 +691,7 @@ def thickness_calibration_reset():
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_react_app(path):
-    dist_dir = '/home/linux/final_webapp/dist'
+    dist_dir = os.path.join(BASE_DIR, '..', 'dist')
     if path and os.path.exists(os.path.join(dist_dir, path)):
         return send_from_directory(dist_dir, path)
     return send_from_directory(dist_dir, 'index.html')
@@ -776,13 +844,13 @@ def background_stream_task():
         return
 
     insert_query = """
-        INSERT INTO {table} (id, timestamp, sensor_a, sensor_b, sensor_c)
+        INSERT INTO {table} (id, timestamp, sensor_a, sensor_b, thickness)
         VALUES %s
         ON CONFLICT (id) DO UPDATE SET 
             timestamp = EXCLUDED.timestamp,
             sensor_a = EXCLUDED.sensor_a,
             sensor_b = EXCLUDED.sensor_b,
-            sensor_c = EXCLUDED.sensor_c
+            thickness = EXCLUDED.thickness
     """
     
     unf_query = insert_query.format(table=DB_TABLE_UNFILTERED)
@@ -804,26 +872,29 @@ def background_stream_task():
             batches = {sid: batches.get(sid, []) for sid in sensors_snapshot.keys()}
 
         all_sensors_failed = True
-        thickness_snapshot = {"A": None, "B": None, "C": None}
+        distance_snapshot = {"A": None, "B": None}
 
         for sid, sensor in sensors_snapshot.items():
             val = sensor.get_single_measurement()
             if val is not None:
-                thickness_value = calculate_thickness(sid, val)
-                batches[sid].append(thickness_value)
-                thickness_snapshot[sid] = thickness_value
+                batches[sid].append(val)
+                distance_snapshot[sid] = val
                 all_sensors_failed = False
         
         if all_sensors_failed:
             time.sleep(0.01)
         else:
+            raw_thickness = calculate_opposite_thickness(
+                distance_snapshot.get("A"),
+                distance_snapshot.get("B")
+            )
             raw_ts = datetime.datetime.now()
             raw_db_buffer.append((
                 unf_id, 
                 raw_ts, 
-                thickness_snapshot.get("A"), 
-                thickness_snapshot.get("B"), 
-                thickness_snapshot.get("C")
+                distance_snapshot.get("A"), 
+                distance_snapshot.get("B"),
+                raw_thickness
             ))
             unf_id = (unf_id % LIMIT_UNFILTERED) + 1
 
@@ -834,20 +905,26 @@ def background_stream_task():
             
             for sid in sensors_snapshot.keys():
                 if batches[sid]:
-                    payload[f"sensor_{sid}"] = round(calculate_filtered_average(batches[sid]), 3)
+                    payload[f"distance_{sid}"] = round(calculate_filtered_average(batches[sid]), 3)
                     batches[sid] = []
                     has_data = True
                 else:
-                    payload[f"sensor_{sid}"] = None
+                    payload[f"distance_{sid}"] = None
 
+            # Calculate thickness from filtered averages
             if has_data:
+                dist_A = payload.get("distance_A")
+                dist_B = payload.get("distance_B")
+                thickness_val = calculate_opposite_thickness(dist_A, dist_B)
+                payload["thickness"] = thickness_val
+
                 fil_ts = datetime.datetime.now()
                 fil_tuple = [(
                     fil_id,
                     fil_ts,
-                    payload.get("sensor_A"),
-                    payload.get("sensor_B"),
-                    payload.get("sensor_C")
+                    dist_A,
+                    dist_B,
+                    thickness_val
                 )]
                 
                 try:

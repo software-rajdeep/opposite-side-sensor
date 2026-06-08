@@ -89,6 +89,59 @@ export default function App() {
     }
   }
 
+  async function handleSetGapDistance(gapDistance) {
+    setCalibrationBusy(true);
+    try {
+      const response = await fetch(`${SERVER}/thickness/gap`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gap_distance: gapDistance }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        showToast(data?.error || "Unable to set gap distance", "error");
+        return false;
+      }
+
+      await refreshThicknessState();
+      try { window.localStorage.removeItem("thicknessmon.calibrated"); } catch {}
+      try { window.localStorage.setItem("thicknessmon.calibrated", "1"); } catch {}
+      showToast(data.message || "Gap distance set successfully", "success");
+      return true;
+    } catch {
+      showToast("Unable to set gap distance", "error");
+      return false;
+    } finally {
+      setCalibrationBusy(false);
+    }
+  }
+
+  async function handleResetGap() {
+    setCalibrationBusy(true);
+    try {
+      const response = await fetch(`${SERVER}/thickness/calibration/reset`, {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        showToast(data?.error || "Unable to reset", "error");
+        return false;
+      }
+
+      await refreshThicknessState();
+      try { window.localStorage.removeItem("thicknessmon.calibrated"); } catch {}
+      showToast(data.message || "Reset successfully", "success");
+      return true;
+    } catch {
+      showToast("Unable to reset", "error");
+      return false;
+    } finally {
+      setCalibrationBusy(false);
+    }
+  }
+
   async function handleResetCalibration() {
     setCalibrationBusy(true);
     try {
@@ -134,9 +187,9 @@ export default function App() {
         ts: data.timestamp
           ? data.timestamp.replace("T", " ").slice(0, 23)
           : new Date().toISOString().replace("T", " ").slice(0, 23),
-        a: data.sensor_A ?? null,
-        b: data.sensor_B ?? null,
-        c: data.sensor_C ?? null,
+        a: data.distance_A ?? null,
+        b: data.distance_B ?? null,
+        thickness: data.thickness ?? null,
       };
 
       dataBufferRef.current = [row, ...dataBufferRef.current].slice(0, 100000);
@@ -243,8 +296,8 @@ export default function App() {
               connected={connected}
               onToggle={handleToggle}
               thicknessState={thicknessState}
-              onApplyCalibration={handleApplyCalibration}
-              onResetCalibration={handleResetCalibration}
+              onSetGapDistance={handleSetGapDistance}
+              onResetGap={handleResetGap}
               calibrationBusy={calibrationBusy}
               runModeVisitKey={runModeVisitKey}
             />

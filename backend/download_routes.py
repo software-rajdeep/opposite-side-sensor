@@ -1,6 +1,3 @@
-# ==========================================
-# DOWNLOAD & FRONTEND ROUTES
-# ==========================================
 import os
 import csv
 import io
@@ -17,7 +14,7 @@ DB_PASS = "rapl2026"
 
 
 def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED):
-    from flask import request, jsonify, Response, send_from_directory
+    from flask import request, jsonify, Response
 
     @app.route('/download/filtered', methods=['POST'])
     def download_filtered():
@@ -35,13 +32,13 @@ def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED):
             conn.close()
             output = io.StringIO()
             writer = csv.writer(output)
-            writer.writerow(["id", "timestamp", "sensor_a_thickness", "sensor_b_thickness", "sensor_c_thickness"])
+            writer.writerow(["id", "timestamp", "sensor_a_distance", "sensor_b_distance", "sensor_c_distance"])
             writer.writerows(rows)
             output.seek(0)
             return Response(
                 output.getvalue(),
                 mimetype="text/csv",
-                headers={"Content-Disposition": "attachment; filename=filtered_thickness_data.csv"}
+                headers={"Content-Disposition": "attachment; filename=filtered_distance_data.csv"}
             )
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -62,13 +59,13 @@ def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED):
             conn.close()
             output = io.StringIO()
             writer = csv.writer(output)
-            writer.writerow(["id", "timestamp", "sensor_a_thickness", "sensor_b_thickness", "sensor_c_thickness"])
+            writer.writerow(["id", "timestamp", "sensor_a_distance", "sensor_b_distance", "sensor_c_distance"])
             writer.writerows(rows)
             output.seek(0)
             return Response(
                 output.getvalue(),
                 mimetype="text/csv",
-                headers={"Content-Disposition": "attachment; filename=unfiltered_thickness_data.csv"}
+                headers={"Content-Disposition": "attachment; filename=unfiltered_distance_data.csv"}
             )
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -93,14 +90,3 @@ def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED):
             }), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def serve_frontend(path):
-        if path.startswith('socket.io'):
-            from flask import abort
-            abort(404)
-        dist_folder = FRONTEND_DIST_DIR if os.path.isdir(FRONTEND_DIST_DIR) else os.path.join(BASE_DIR, 'dist')
-        if path and os.path.exists(os.path.join(dist_folder, path)):
-            return send_from_directory(dist_folder, path)
-        return send_from_directory(dist_folder, 'index.html')

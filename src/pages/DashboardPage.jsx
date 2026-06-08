@@ -43,7 +43,7 @@ export default function DashboardPage({ user, onNavigate, rows, streamRate }) {
     {
       id:    "run-mode",
       label: "Live Run Mode",
-      desc:  "Monitor real-time thickness data from all active sensors.",
+      desc:  "Monitor real-time thickness data from active sensors.",
       icon:  <Ic.Activity />,
       color: "var(--green)",
       bg:    "rgba(34,197,94,0.1)",

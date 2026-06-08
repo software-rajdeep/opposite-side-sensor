@@ -1,0 +1,16 @@
+[Unit]
+Description=Thickness Monitoring Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=linux
+Group=linux
+WorkingDirectory=home/linux/opposite-side-sensor/backend/
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /home/linux/opposite-side-sensor/backend/cd22_server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
