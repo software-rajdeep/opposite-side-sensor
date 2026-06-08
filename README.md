@@ -36,3 +36,17 @@ The backend expects PostgreSQL plus the sensor hardware/network configuration de
 - `src/` - frontend source
 - `backend/` - Flask backend source
 - `dist/` - generated frontend build output
+
+## Git Workflow
+
+This repository is hosted at **https://github.com/software-rajdeep/opposite-side-sensor** (remote `origin`, branch `main`).
+
+To commit and push changes:
+
+```bash
+git add .
+git commit -m "description of changes"
+git push
+```
+
+The upstream tracking is already configured, so `git push` without arguments pushes to `origin main`.
