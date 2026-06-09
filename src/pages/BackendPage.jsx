@@ -322,34 +322,6 @@ export default function BackendPage({ user }) {
                 </td>
               </tr>
               <tr>
-                <td className="td-mono">sensor_filtered_readings</td>
-                <td className="td-mono">
-                  {dbStatus ? dbStatus.filtered.toLocaleString() : "—"}
-                </td>
-                <td className="td-mono">
-                  {srvConfig ? srvConfig.limit_filtered.toLocaleString() : "10,000,000"}
-                </td>
-                <td>
-                  <span className={`badge ${dbStatus && srvConfig && dbStatus.filtered > srvConfig.limit_filtered * 0.8 ? "badge-amber" : "badge-green"}`}>
-                    {dbStatus && srvConfig && dbStatus.filtered > srvConfig.limit_filtered * 0.8 ? "Almost Full" : "Healthy"}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <td className="td-mono">sensor_unfiltered_readings</td>
-                <td className="td-mono">
-                  {dbStatus ? dbStatus.unfiltered.toLocaleString() : "—"}
-                </td>
-                <td className="td-mono">
-                  {srvConfig ? srvConfig.limit_unfiltered.toLocaleString() : "1,000,000"}
-                </td>
-                <td>
-                  <span className={`badge ${dbStatus && srvConfig && dbStatus.unfiltered > srvConfig.limit_unfiltered * 0.8 ? "badge-amber" : "badge-green"}`}>
-                    {dbStatus && srvConfig && dbStatus.unfiltered > srvConfig.limit_unfiltered * 0.8 ? "Almost Full" : "Healthy"}
-                  </span>
-                </td>
-              </tr>
-              <tr>
                 <td className="td-mono">users</td>
                 <td className="td-mono">
                   {dbStatus ? dbStatus.users : "—"}
@@ -420,8 +392,6 @@ SERVER_PORT      = ${srvConfig.server_port}
 SENSOR_TIMEOUT   = ${srvConfig.sensor_timeout}
 LIMIT_THICKNESS     = ${srvConfig.limit_thickness.toLocaleString()}
 LIMIT_THICKNESS_RAW = ${srvConfig.limit_thickness_raw.toLocaleString()}
-LIMIT_FILTERED      = ${srvConfig.limit_filtered.toLocaleString()}
-LIMIT_UNFILTERED    = ${srvConfig.limit_unfiltered.toLocaleString()}
 DB_HOST             = ${srvConfig.db_host}
 DB_NAME             = ${srvConfig.db_name}`}
             </pre>
