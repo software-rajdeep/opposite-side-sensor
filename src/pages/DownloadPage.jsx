@@ -14,13 +14,13 @@ export default function DownloadPage({ user, onToast }) {
     setDl(type);
     try {
       const endpoint = type === "filtered"
-        ? `${SERVER}/download/filtered`
+        ? `${SERVER}/download/thickness`
         : `${SERVER}/download/raw`;
 
       const res = await fetch(endpoint, {
-        method:  "POST",
+        method:  type === "filtered" ? "GET" : "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({}),
+        body:    type === "filtered" ? undefined : JSON.stringify({}),
       });
 
       if (!res.ok) {
@@ -99,11 +99,11 @@ export default function DownloadPage({ user, onToast }) {
             }}>
               <Ic.Download />
             </div>
-            <h3>Filtered Data</h3>
+            <h3>Thickness Data</h3>
           </div>
           <p>
-            Trimmed-mean averaged readings from PostgreSQL.
-            Suitable for analysis and reporting.
+            Calculated thickness from opposite-side sensor readings.
+            Columns: id, timestamp, sensor A, sensor B, thickness.
           </p>
           <button
             className="btn btn-blue"
@@ -113,7 +113,7 @@ export default function DownloadPage({ user, onToast }) {
           >
             {dl === "filtered"
               ? <><Spinner /> Exporting…</>
-              : <><Ic.Download /> Export Filtered CSV</>
+              : <><Ic.Download /> Export Thickness CSV</>
             }
           </button>
         </div>

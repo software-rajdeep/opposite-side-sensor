@@ -32,7 +32,6 @@ export default function SensorConfigPage({ user, onToast }) {
   const [config, setConfig] = useState({
     A: { sampling: "0", averaging: "2", polarity: "0", alarm: "0" },
     B: { sampling: "0", averaging: "2", polarity: "0", alarm: "0" },
-    C: { sampling: "0", averaging: "2", polarity: "0", alarm: "0" },
   });
 
   const [streamRate, setStreamRate] = useState("5");
@@ -67,7 +66,7 @@ export default function SensorConfigPage({ user, onToast }) {
       const AL_MAP = { "Clamp":"0","Hold":"1" };
 
       const newConfig = { ...config };
-      for (const sid of ["A","B","C"]) {
+      for (const sid of ["A","B"]) {
         const key = `sensor_${sid}`;
         if (!cfg[key]) continue;
         if (cfg[key].sampling_period)
@@ -161,7 +160,7 @@ export default function SensorConfigPage({ user, onToast }) {
     addLog("──── Save All started ────", "sys");
     let allOk = true;
 
-    for (const sid of ["A","B","C"]) {
+    for (const sid of ["A","B"]) {
       const spIdx = parseInt(config[sid].sampling);
       const avIdx = parseInt(config[sid].averaging);
       const opIdx = parseInt(config[sid].polarity);
@@ -326,7 +325,6 @@ export default function SensorConfigPage({ user, onToast }) {
                 <th>Parameter</th>
                 <th>Sensor A</th>
                 <th>Sensor B</th>
-                <th>Sensor C</th>
               </tr>
             </thead>
             <tbody>
@@ -335,7 +333,7 @@ export default function SensorConfigPage({ user, onToast }) {
                   <td style={{ color: "var(--text-2)", fontFamily: "var(--mono)", fontSize: 12 }}>
                     {row.label}
                   </td>
-                  {["A","B","C"].map(sid => (
+                  {["A","B"].map(sid => (
                     <td key={sid}>
                       <select
                         className="form-select"
@@ -354,7 +352,7 @@ export default function SensorConfigPage({ user, onToast }) {
                 <td style={{ color: "var(--blue)", fontFamily: "var(--mono)", fontSize: 12 }}>
                   Apply
                 </td>
-                {["A","B","C"].map(sid => (
+                {["A","B"].map(sid => (
                   <td key={sid}>
                     <button
                       className="btn btn-outline btn-sm"
@@ -418,7 +416,7 @@ export default function SensorConfigPage({ user, onToast }) {
                   onChange={e => setRawFields(f => ({ ...f, sensor: e.target.value }))}
                   style={{ maxWidth: 120 }}
                 >
-                  {["A","B","C"].map(s => <option key={s}>{s}</option>)}
+                  {["A","B"].map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>

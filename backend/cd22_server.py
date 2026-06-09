@@ -36,6 +36,7 @@ DB_USER = "rapl"
 DB_PASS = "rapl2026" 
 DB_TABLE_FILTERED = "sensor_filtered_readings"
 DB_TABLE_UNFILTERED = "sensor_unfiltered_readings"
+DB_TABLE_THICKNESS = "opposite_thickness_readings"
 DB_TABLE_USERS = "users"
 
 LIMIT_FILTERED = 10_000_000
@@ -81,12 +82,6 @@ def init_config_file():
                 "alarm_output": "N.O.",
                 "output_polarity": "Light_ON"
                 
-            },
-            "sensor_C": {
-                "sampling_period": "500us",
-                "averaging": 128,
-                "alarm_output": "N.O.",
-                "output_polarity": "Light_ON"
             }
         }
         with open(CONFIG_FILE_PATH, 'w') as f:
@@ -391,11 +386,20 @@ def init_db():
                     timestamp TIMESTAMP,
                     sensor_a REAL,
                     sensor_b REAL,
-                    sensor_c REAL,
                     thickness REAL
                 )
             """)
             
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {DB_TABLE_THICKNESS} (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP,
+                sensor_a REAL,
+                sensor_b REAL,
+                thickness REAL
+            )
+        """)
+        
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {DB_TABLE_USERS} (
                 id SERIAL PRIMARY KEY,
@@ -547,7 +551,7 @@ from user_routes import register_user_routes
 from download_routes import register_download_routes
 
 register_user_routes(app)
-register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED)
+register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TABLE_THICKNESS)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
 
@@ -839,6 +843,7 @@ def background_stream_task():
         db_cur = db_conn.cursor()
         unf_id = get_next_db_id(db_cur, DB_TABLE_UNFILTERED, LIMIT_UNFILTERED)
         fil_id = get_next_db_id(db_cur, DB_TABLE_FILTERED, LIMIT_FILTERED)
+        thick_id = get_next_db_id(db_cur, DB_TABLE_THICKNESS, LIMIT_FILTERED)
     except Exception as e:
         print(f"!!! DB Connection Failed in Stream Task: {e}")
         return
@@ -855,6 +860,7 @@ def background_stream_task():
     
     unf_query = insert_query.format(table=DB_TABLE_UNFILTERED)
     fil_query = insert_query.format(table=DB_TABLE_FILTERED)
+    thick_query = "INSERT INTO {} (timestamp, sensor_a, sensor_b, thickness) VALUES %s".format(DB_TABLE_THICKNESS)
 
     batches = {sid: [] for sid in active_sensors_map.keys()}
     raw_db_buffer = []
@@ -930,6 +936,10 @@ def background_stream_task():
                 try:
                     extras.execute_values(db_cur, fil_query, fil_tuple)
                     fil_id = (fil_id % LIMIT_FILTERED) + 1
+                    
+                    # Store thickness reading in opposite_thickness_readings table
+                    thick_tuple = [(fil_ts, dist_A, dist_B, thickness_val)]
+                    extras.execute_values(db_cur, thick_query, thick_tuple)
                     
                     if raw_db_buffer:
                         extras.execute_values(db_cur, unf_query, raw_db_buffer)
