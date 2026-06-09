@@ -71,7 +71,8 @@ def init_config_file():
         print("--- Creating default sensor_config.json ---")
         default_config = {
             "global_settings": {
-                "stream_rate_hz": 5.0
+                "stream_rate_hz": 5.0,
+                "trim_percentage": 10
             },
             "sensor_A": {
                 "sampling_period": "500us",
@@ -791,6 +792,28 @@ def write_setting():
     except (ValueError, TypeError):
         return jsonify({"error": "Invalid format"}), 400
 
+@app.route('/stream/trim', methods=['POST'])
+def config_trim():
+    data = request.json
+    try:
+        trim_pct = int(data.get("trim_pct", 10))
+        if not (0 <= trim_pct <= 20):
+            return jsonify({"error": "Trim percentage must be 0-20."}), 400
+        # Also persist to sensor_config.json
+        try:
+            with open(CONFIG_FILE_PATH, 'r') as f:
+                cfg = json.load(f)
+            if "global_settings" not in cfg:
+                cfg["global_settings"] = {}
+            cfg["global_settings"]["trim_percentage"] = trim_pct
+            with open(CONFIG_FILE_PATH, 'w') as f:
+                json.dump(cfg, f, indent=4)
+        except Exception as e:
+            print(f"Could not persist trim_percentage to config file: {e}")
+        return jsonify({"message": f"Trim percentage set to {trim_pct}%", "trim_pct": trim_pct}), 200
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid trim_pct value"}), 400
+
 @app.route('/stream/config', methods=['POST'])
 def config_stream():
     data = request.json
@@ -838,13 +861,13 @@ def server_network():
 # ==========================================
 # WEBSOCKET & DB STREAMING
 # ==========================================
-def calculate_filtered_average(data_batch):
+def calculate_filtered_average(data_batch, trim_pct=10):
     if not data_batch: return None
     n = len(data_batch)
     if n < 3: return sum(data_batch) / n
     sorted_data = sorted(data_batch)
-    trim_count = max(1, int(n * 0.10)) if n > 2 else 0
-    filtered_data = sorted_data[trim_count : -trim_count] if trim_count > 0 else sorted_data
+    trim_count = max(1, int(n * (trim_pct / 100))) if n > 2 and trim_pct > 0 else 0
+    filtered_data = sorted_data[trim_count:-trim_count] if trim_count > 0 else sorted_data
     return sum(filtered_data) / len(filtered_data) if filtered_data else 0.0
 
 def background_stream_task():
@@ -876,6 +899,15 @@ def background_stream_task():
     fil_query = insert_query.format(table=DB_TABLE_FILTERED)
     thick_query = insert_query.format(table=DB_TABLE_THICKNESS)
     thick_raw_query = insert_query.format(table=DB_TABLE_THICKNESS_RAW)
+
+    # Load trim percentage from config file
+    def get_trim_pct():
+        try:
+            with open(CONFIG_FILE_PATH, 'r') as f:
+                cfg = json.load(f)
+            return cfg.get("global_settings", {}).get("trim_percentage", 10)
+        except:
+            return 10
 
     batches = {sid: [] for sid in active_sensors_map.keys()}
     raw_db_buffer = []
@@ -935,9 +967,10 @@ def background_stream_task():
             payload = {"timestamp": datetime.datetime.now().isoformat()}
             has_data = False
             
+            trim_pct = get_trim_pct()
             for sid in sensors_snapshot.keys():
                 if batches[sid]:
-                    payload[f"distance_{sid}"] = round(calculate_filtered_average(batches[sid]), 3)
+                    payload[f"distance_{sid}"] = round(calculate_filtered_average(batches[sid], trim_pct), 3)
                     batches[sid] = []
                     has_data = True
                 else:

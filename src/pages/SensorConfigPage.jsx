@@ -35,8 +35,10 @@ export default function SensorConfigPage({ user, onToast }) {
   });
 
   const [streamRate, setStreamRate] = useState("5");
+  const [trimPct,    setTrimPct]    = useState("10");
   const [saving,     setSaving]     = useState(false);
   const [busyStream, setBusyStream] = useState(false);
+  const [busyTrim,   setBusyTrim]   = useState(false);
   const [rawFields,  setRawFields]  = useState({ sensor: "A", addr_h: "", addr_l: "", val_h: "", val_l: "" });
   const [rawLoading, setRawLoading] = useState(false);
   const [log,        setLog]        = useState([{ type: "sys", msg: "System ready." }]);
@@ -59,7 +61,8 @@ export default function SensorConfigPage({ user, onToast }) {
 
       if (cfg.global_settings?.stream_rate_hz)
         setStreamRate(String(cfg.global_settings.stream_rate_hz));
-
+      if (cfg.global_settings?.trim_percentage !== undefined)
+        setTrimPct(String(cfg.global_settings.trim_percentage));
       const SP_MAP = { "500us":"0","1000us":"1","2000us":"2","4000us":"3","AUTO":"4" };
       const AV_MAP = { "1":"0","8":"1","64":"2","512":"3" };
       const OP_MAP = { "Light_ON":"0","Dark_ON":"1" };
@@ -249,6 +252,46 @@ export default function SensorConfigPage({ user, onToast }) {
     setBusyStream(false);
   }
 
+  // ── APPLY TRIM ───────────────────────────────────────────────────────────
+  async function applyTrim() {
+    setBusyTrim(true);
+    const pct = parseInt(trimPct);
+    addLog(`[GLOBAL] Setting Trim → ${pct}% (${100 - pct * 2}% readings used)`, "inf");
+    try {
+      const res = await fetch(`${SERVER}/stream/trim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trim_pct: pct }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        addLog(`[GLOBAL] ✓ Trim = ${pct}%`, "ok");
+        // Sync JSON config file
+        try {
+          const getRes = await fetch(`${SERVER}/config/file`);
+          const cfg = await getRes.json();
+          cfg.global_settings.trim_percentage = pct;
+          await fetch(`${SERVER}/config/file`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(cfg),
+          });
+          addLog(`[GLOBAL] ✓ JSON updated`, "ok");
+        } catch {
+          addLog(`[GLOBAL] ✗ JSON sync failed`, "err");
+        }
+        onToast(`Trim set to ${pct}%`, "success");
+      } else {
+        addLog(`[GLOBAL] ✗ Trim failed: ${data.error}`, "err");
+        onToast("Trim update failed", "error");
+      }
+    } catch (e) {
+      addLog(`[GLOBAL] ✗ Network error`, "err");
+      onToast("Network error", "error");
+    }
+    setTimeout(() => setBusyTrim(false), 2500);
+  }
+
   // ── RAW WRITE ────────────────────────────────────────────────────────────
   async function handleExecuteWrite() {
     const { sensor, addr_h, addr_l, val_h, val_l } = rawFields;
@@ -374,6 +417,52 @@ export default function SensorConfigPage({ user, onToast }) {
           </table>
         </div>
 
+        {/* TRIMMING PERCENTAGE */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title"><Ic.Activity /> Trimming Percentage</div>
+          </div>
+          <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label className="form-label">Trim Percent (0–20%)</label>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <select
+                  className="form-select"
+                  value={trimPct}
+                  onChange={e => setTrimPct(e.target.value)}
+                  style={{ maxWidth: 120 }}
+                >
+                  {Array.from({ length: 21 }, (_, i) => i).map(v => (
+                    <option key={v} value={v}>{v}%</option>
+                  ))}
+                </select>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={applyTrim}
+                  disabled={busyTrim}
+                >
+                  {busyTrim ? <><Spinner /> Applying…</> : "Apply"}
+                </button>
+              </div>
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                padding: "4px 10px",
+                borderRadius: 6,
+                fontSize: 12,
+                fontFamily: "var(--mono)",
+                background: "rgba(59,130,246,0.1)",
+                color: "var(--blue)",
+                border: "1px solid rgba(59,130,246,0.2)",
+              }}>
+                ℹ️ {100 - parseInt(trimPct || 0) * 2}% readings used
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* GLOBAL STREAM + RAW WRITE */}
         <div className="card">
           <div className="card-header">
@@ -445,7 +534,6 @@ export default function SensorConfigPage({ user, onToast }) {
 
           </div>
         </div>
-
         {/* ACTIVITY LOG */}
         <div className="card">
           <div className="card-header">
