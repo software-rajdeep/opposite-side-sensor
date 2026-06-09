@@ -35,6 +35,7 @@ export default function RunModePage({
 
   const latest = rows[0];
   const latestThickness = latest?.thickness ?? null;
+  const sensorsOutOfRange = latestThickness !== null && parseFloat(latestThickness) === 0;
 
   // Get last 100 thickness readings for the history table
   const thicknessHistory = [...rows].reverse().slice(0, 100).filter(r => r.thickness !== null);
@@ -269,6 +270,36 @@ export default function RunModePage({
           {connected ? "Connected" : 'Disconnected - Press "Start Live" to connect'}
         </div>
       </div>
+
+      {/* SENSORS OUT OF RANGE NOTICE */}
+      {sensorsOutOfRange && (
+        <div style={{
+          padding: "0 32px",
+          marginBottom: 16,
+        }}>
+          <div style={{
+            padding: "14px 20px",
+            borderRadius: "var(--r2)",
+            background: "linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04))",
+            border: "1px solid rgba(239,68,68,0.25)",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--red)",
+          }}>
+            <span style={{ fontSize: 20, lineHeight: 1 }}>⚠</span>
+            <span>Status: Sensors are out of range</span>
+            <span style={{
+              marginLeft: "auto", fontSize: 12, fontWeight: 400,
+              fontFamily: "var(--mono)", color: "var(--text-3)",
+            }}>
+              Thickness: 0.000 mm
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* GAP DISTANCE STATUS + RESET */}
       <div className="section">

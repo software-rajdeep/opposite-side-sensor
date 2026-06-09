@@ -352,6 +352,8 @@ def calculate_opposite_thickness(dist_A, dist_B):
     
     # Thickness = gap minus distances from both sensors to object surfaces
     thickness = gap - actual_dist_A - actual_dist_B
+    if thickness < 0:
+        thickness = 0.0
     return round(thickness, 3)
 
 def calculate_thickness(sensor_id, current_reading):
@@ -367,6 +369,8 @@ def calculate_thickness(sensor_id, current_reading):
         # thickness delta so the displayed value changes in the same direction as
         # the actual object thickness.
         thickness = float(reference_thickness) + (float(baseline_reading) - float(current_reading))
+        if thickness < 0:
+            thickness = 0.0
         return round(thickness, 3)
 
     reference_reading = state["reference_readings"].get(sensor_id)
