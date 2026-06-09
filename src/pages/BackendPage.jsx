@@ -294,6 +294,34 @@ export default function BackendPage({ user }) {
             </thead>
             <tbody>
               <tr>
+                <td className="td-mono">opposite_thickness_readings</td>
+                <td className="td-mono">
+                  {dbStatus ? dbStatus.thickness.toLocaleString() : "—"}
+                </td>
+                <td className="td-mono">
+                  {srvConfig ? srvConfig.limit_thickness.toLocaleString() : "10,000,000"}
+                </td>
+                <td>
+                  <span className={`badge ${dbStatus && srvConfig && dbStatus.thickness > srvConfig.limit_thickness * 0.8 ? "badge-amber" : "badge-green"}`}>
+                    {dbStatus && srvConfig && dbStatus.thickness > srvConfig.limit_thickness * 0.8 ? "Almost Full" : "Healthy"}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td className="td-mono">opposite_thickness_raw_readings</td>
+                <td className="td-mono">
+                  {dbStatus ? dbStatus.thickness_raw.toLocaleString() : "—"}
+                </td>
+                <td className="td-mono">
+                  {srvConfig ? srvConfig.limit_thickness_raw.toLocaleString() : "1,000,000"}
+                </td>
+                <td>
+                  <span className={`badge ${dbStatus && srvConfig && dbStatus.thickness_raw > srvConfig.limit_thickness_raw * 0.8 ? "badge-amber" : "badge-green"}`}>
+                    {dbStatus && srvConfig && dbStatus.thickness_raw > srvConfig.limit_thickness_raw * 0.8 ? "Almost Full" : "Healthy"}
+                  </span>
+                </td>
+              </tr>
+              <tr>
                 <td className="td-mono">sensor_filtered_readings</td>
                 <td className="td-mono">
                   {dbStatus ? dbStatus.filtered.toLocaleString() : "—"}
@@ -390,10 +418,12 @@ ${Object.entries(srvConfig.sensor_configs).map(([k, v]) =>
 
 SERVER_PORT      = ${srvConfig.server_port}
 SENSOR_TIMEOUT   = ${srvConfig.sensor_timeout}
-LIMIT_FILTERED   = ${srvConfig.limit_filtered.toLocaleString()}
-LIMIT_UNFILTERED = ${srvConfig.limit_unfiltered.toLocaleString()}
-DB_HOST          = ${srvConfig.db_host}
-DB_NAME          = ${srvConfig.db_name}`}
+LIMIT_THICKNESS     = ${srvConfig.limit_thickness.toLocaleString()}
+LIMIT_THICKNESS_RAW = ${srvConfig.limit_thickness_raw.toLocaleString()}
+LIMIT_FILTERED      = ${srvConfig.limit_filtered.toLocaleString()}
+LIMIT_UNFILTERED    = ${srvConfig.limit_unfiltered.toLocaleString()}
+DB_HOST             = ${srvConfig.db_host}
+DB_NAME             = ${srvConfig.db_name}`}
             </pre>
           ) : (
             <span style={{ color: "var(--text-3)", fontFamily: "var(--mono)", fontSize: 12 }}>

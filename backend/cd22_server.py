@@ -836,13 +836,15 @@ def config_stream():
 @app.route('/server/config', methods=['GET'])
 def server_config():
     return jsonify({
-        "sensor_configs":    SENSOR_CONFIGS,
-        "server_port":       SERVER_PORT,
-        "sensor_timeout":    SENSOR_TIMEOUT,
-        "limit_filtered":    LIMIT_FILTERED,
-        "limit_unfiltered":  LIMIT_UNFILTERED,
-        "db_host":           DB_HOST,
-        "db_name":           DB_NAME,
+        "sensor_configs":     SENSOR_CONFIGS,
+        "server_port":        SERVER_PORT,
+        "sensor_timeout":     SENSOR_TIMEOUT,
+        "limit_filtered":     LIMIT_FILTERED,
+        "limit_unfiltered":   LIMIT_UNFILTERED,
+        "limit_thickness":    LIMIT_THICKNESS,
+        "limit_thickness_raw": LIMIT_THICKNESS_RAW,
+        "db_host":            DB_HOST,
+        "db_name":            DB_NAME,
         "thickness_state":    get_thickness_state(),
     }), 200
 
