@@ -15,12 +15,11 @@ export default function DownloadPage({ user, onToast }) {
     try {
       const endpoint = type === "filtered"
         ? `${SERVER}/download/thickness`
-        : `${SERVER}/download/raw`;
+        : `${SERVER}/download/thickness/raw`;
 
       const res = await fetch(endpoint, {
-        method:  type === "filtered" ? "GET" : "POST",
+        method:  "GET",
         headers: { "Content-Type": "application/json" },
-        body:    type === "filtered" ? undefined : JSON.stringify({}),
       });
 
       if (!res.ok) {
@@ -131,11 +130,11 @@ export default function DownloadPage({ user, onToast }) {
             }}>
               <Ic.Database />
             </div>
-            <h3>Raw Unfiltered Data</h3>
+            <h3>Raw Thickness Data</h3>
           </div>
           <p>
-            Full-resolution unprocessed readings from PostgreSQL.
-            Use for debugging and detailed signal analysis.
+            Full-resolution raw thickness readings from opposite-side sensors.
+            Each row is a single ~4ms measurement with thickness calculated in real time.
           </p>
           <button
             className="btn btn-green"

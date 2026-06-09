@@ -37,10 +37,13 @@ DB_PASS = "rapl2026"
 DB_TABLE_FILTERED = "sensor_filtered_readings"
 DB_TABLE_UNFILTERED = "sensor_unfiltered_readings"
 DB_TABLE_THICKNESS = "opposite_thickness_readings"
+DB_TABLE_THICKNESS_RAW = "opposite_thickness_raw_readings"
 DB_TABLE_USERS = "users"
 
 LIMIT_FILTERED = 10_000_000
-LIMIT_UNFILTERED = 1_000_000  
+LIMIT_UNFILTERED = 1_000_000
+LIMIT_THICKNESS = 10_000_000
+LIMIT_THICKNESS_RAW = 1_000_000
 
 # --- FILE CONFIG ---
 CONFIG_FILE_PATH = os.path.join(BASE_DIR, "sensor_config.json")
@@ -392,7 +395,17 @@ def init_db():
             
         cur.execute(f"""
             CREATE TABLE IF NOT EXISTS {DB_TABLE_THICKNESS} (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY,
+                timestamp TIMESTAMP,
+                sensor_a REAL,
+                sensor_b REAL,
+                thickness REAL
+            )
+        """)
+        
+        cur.execute(f"""
+            CREATE TABLE IF NOT EXISTS {DB_TABLE_THICKNESS_RAW} (
+                id INTEGER PRIMARY KEY,
                 timestamp TIMESTAMP,
                 sensor_a REAL,
                 sensor_b REAL,
@@ -551,7 +564,7 @@ from user_routes import register_user_routes
 from download_routes import register_download_routes
 
 register_user_routes(app)
-register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TABLE_THICKNESS)
+register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TABLE_THICKNESS, DB_TABLE_THICKNESS_RAW)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='threading')
 
@@ -843,7 +856,8 @@ def background_stream_task():
         db_cur = db_conn.cursor()
         unf_id = get_next_db_id(db_cur, DB_TABLE_UNFILTERED, LIMIT_UNFILTERED)
         fil_id = get_next_db_id(db_cur, DB_TABLE_FILTERED, LIMIT_FILTERED)
-        thick_id = get_next_db_id(db_cur, DB_TABLE_THICKNESS, LIMIT_FILTERED)
+        thick_id = get_next_db_id(db_cur, DB_TABLE_THICKNESS, LIMIT_THICKNESS)
+        thick_raw_id = get_next_db_id(db_cur, DB_TABLE_THICKNESS_RAW, LIMIT_THICKNESS_RAW)
     except Exception as e:
         print(f"!!! DB Connection Failed in Stream Task: {e}")
         return
@@ -860,10 +874,12 @@ def background_stream_task():
     
     unf_query = insert_query.format(table=DB_TABLE_UNFILTERED)
     fil_query = insert_query.format(table=DB_TABLE_FILTERED)
-    thick_query = "INSERT INTO {} (timestamp, sensor_a, sensor_b, thickness) VALUES %s".format(DB_TABLE_THICKNESS)
+    thick_query = insert_query.format(table=DB_TABLE_THICKNESS)
+    thick_raw_query = insert_query.format(table=DB_TABLE_THICKNESS_RAW)
 
     batches = {sid: [] for sid in active_sensors_map.keys()}
     raw_db_buffer = []
+    thick_raw_db_buffer = []
     last_emit_time = time.time()
 
     while True:
@@ -903,6 +919,16 @@ def background_stream_task():
                 raw_thickness
             ))
             unf_id = (unf_id % LIMIT_UNFILTERED) + 1
+            
+            # Store raw thickness reading in opposite_thickness_raw_readings buffer
+            thick_raw_db_buffer.append((
+                thick_raw_id,
+                raw_ts,
+                distance_snapshot.get("A"),
+                distance_snapshot.get("B"),
+                raw_thickness
+            ))
+            thick_raw_id = (thick_raw_id % LIMIT_THICKNESS_RAW) + 1
 
         current_time = time.time()
         if current_time - last_emit_time >= (1.0 / stream_state["target_rate_hz"]):
@@ -938,12 +964,23 @@ def background_stream_task():
                     fil_id = (fil_id % LIMIT_FILTERED) + 1
                     
                     # Store thickness reading in opposite_thickness_readings table
-                    thick_tuple = [(fil_ts, dist_A, dist_B, thickness_val)]
+                    thick_tuple = [(
+                        thick_id,
+                        fil_ts,
+                        dist_A,
+                        dist_B,
+                        thickness_val
+                    )]
                     extras.execute_values(db_cur, thick_query, thick_tuple)
+                    thick_id = (thick_id % LIMIT_THICKNESS) + 1
                     
                     if raw_db_buffer:
                         extras.execute_values(db_cur, unf_query, raw_db_buffer)
                         raw_db_buffer = []
+                    
+                    if thick_raw_db_buffer:
+                        extras.execute_values(db_cur, thick_raw_query, thick_raw_db_buffer)
+                        thick_raw_db_buffer = []
                         
                     db_conn.commit()
                 except Exception as e:

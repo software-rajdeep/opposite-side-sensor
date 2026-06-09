@@ -13,7 +13,7 @@ DB_USER = "rapl"
 DB_PASS = "rapl2026"
 
 
-def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TABLE_THICKNESS):
+def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TABLE_THICKNESS, DB_TABLE_THICKNESS_RAW):
     from flask import request, jsonify, Response
 
     @app.route('/download/filtered', methods=['POST'])
@@ -68,6 +68,33 @@ def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TAB
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route('/download/thickness/raw', methods=['GET'])
+    def download_thickness_raw():
+        """Export opposite_thickness_raw_readings table as CSV."""
+        try:
+            conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+            cur  = conn.cursor()
+            cur.execute(f"""
+                SELECT id, timestamp, sensor_a, sensor_b, thickness
+                FROM {DB_TABLE_THICKNESS_RAW}
+                ORDER BY timestamp ASC
+            """)
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["#", "Timestamp", "Sensor A (mm)", "Sensor B (mm)", "Thickness (mm)"])
+            writer.writerows(rows)
+            output.seek(0)
+            return Response(
+                output.getvalue(),
+                mimetype="text/csv",
+                headers={"Content-Disposition": "attachment; filename=thickness_raw_data.csv"}
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route('/download/thickness', methods=['GET'])
     def download_thickness():
         """Export opposite_thickness_readings table as CSV."""
@@ -106,6 +133,8 @@ def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TAB
             unfiltered_count = cur.fetchone()[0]
             cur.execute(f"SELECT COUNT(*) FROM {DB_TABLE_THICKNESS}")
             thickness_count = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {DB_TABLE_THICKNESS_RAW}")
+            thickness_raw_count = cur.fetchone()[0]
             cur.execute("SELECT COUNT(*) FROM users")
             users_count = cur.fetchone()[0]
             cur.close()
@@ -114,6 +143,7 @@ def register_download_routes(app, DB_TABLE_FILTERED, DB_TABLE_UNFILTERED, DB_TAB
                 "filtered":   filtered_count,
                 "unfiltered": unfiltered_count,
                 "thickness":  thickness_count,
+                "thickness_raw": thickness_raw_count,
                 "users":      users_count,
             }), 200
         except Exception as e:

@@ -5,7 +5,7 @@
     "sensor_A": {
         "alarm_output": "Clamp",
         "averaging": 64,
-        "output_polarity": "Light_ON",
+        "output_polarity": "Dark_ON",
         "sampling_period": "500us"
     },
     "sensor_B": {
