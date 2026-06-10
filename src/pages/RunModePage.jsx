@@ -105,7 +105,7 @@ export default function RunModePage({
     ctx.clearRect(0, 0, W, H);
 
     if (vals.length < 2) {
-      ctx.fillStyle = "#475569";
+      ctx.fillStyle = "var(--text-3)";
       ctx.font = "11px monospace";
       ctx.textAlign = "center";
       ctx.fillText("Waiting for thickness data...", W / 2, H / 2);
@@ -125,7 +125,7 @@ export default function RunModePage({
     function yPos(v) { return pad.top + (1 - (v - dataMin) / (dataMax - dataMin)) * gH; }
 
     // Grid lines
-    ctx.strokeStyle = "#30363d";
+    ctx.strokeStyle = "var(--border)";
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + (i / 4) * gH;
@@ -134,7 +134,7 @@ export default function RunModePage({
       ctx.lineTo(W - pad.right, y);
       ctx.stroke();
       const label = (dataMax - (i / 4) * (dataMax - dataMin)).toFixed(2);
-      ctx.fillStyle = "#475569";
+      ctx.fillStyle = "var(--text-3)";
       ctx.font = "9px monospace";
       ctx.textAlign = "right";
       ctx.fillText(label, pad.left - 4, y + 3);
@@ -142,7 +142,7 @@ export default function RunModePage({
 
     // Min limit line
     if (limitActive && !isNaN(mn) && mn >= dataMin && mn <= dataMax) {
-      ctx.strokeStyle = "rgba(239,68,68,0.6)";
+      ctx.strokeStyle = "rgba(178,73,73,0.5)";
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -154,7 +154,7 @@ export default function RunModePage({
 
     // Max limit line
     if (limitActive && !isNaN(mx) && mx >= dataMin && mx <= dataMax) {
-      ctx.strokeStyle = "rgba(239,68,68,0.6)";
+      ctx.strokeStyle = "rgba(178,73,73,0.5)";
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
@@ -172,7 +172,7 @@ export default function RunModePage({
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = "#10b981";
+    ctx.strokeStyle = "var(--green)";
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -183,7 +183,7 @@ export default function RunModePage({
       );
       ctx.beginPath();
       ctx.arc(xPos(i), yPos(v), 3, 0, Math.PI * 2);
-      ctx.fillStyle = inLimit ? "#10b981" : "#ef4444";
+      ctx.fillStyle = inLimit ? "var(--green)" : "var(--red)";
       ctx.fill();
     });
   }
@@ -256,7 +256,7 @@ export default function RunModePage({
           alignItems: "center",
           gap: 8,
           background: connected ? "var(--green-ghost)" : "var(--bg2)",
-          border: connected ? "1px solid rgba(34,197,94,0.3)" : "1px solid var(--border)",
+          border: connected ? "1px solid rgba(45,122,79,0.25)" : "1px solid var(--border)",
           borderRadius: "var(--r)",
           padding: "6px 12px",
           fontSize: 12,
@@ -280,8 +280,8 @@ export default function RunModePage({
           <div style={{
             padding: "14px 20px",
             borderRadius: "var(--r2)",
-            background: "linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04))",
-            border: "1px solid rgba(239,68,68,0.25)",
+            background: "linear-gradient(135deg, rgba(178,73,73,0.1), rgba(178,73,73,0.03))",
+            border: "1px solid rgba(178,73,73,0.2)",
             display: "flex",
             alignItems: "center",
             gap: 12,
@@ -310,7 +310,7 @@ export default function RunModePage({
           </button>
         </div>
         <div style={{
-          background: "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.06))",
+          background: "linear-gradient(135deg, rgba(45,122,79,0.06), rgba(59,85,168,0.04))",
           border: "1px solid var(--border)",
           borderRadius: "var(--r2)",
           padding: "16px 18px",
@@ -334,8 +334,8 @@ export default function RunModePage({
           <span className="section-title">Calculated Thickness</span>
         </div>
         <div style={{
-          background: "linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04))",
-          border: "2px solid rgba(16,185,129,0.3)",
+          background: "linear-gradient(135deg, rgba(45,122,79,0.08), rgba(45,122,79,0.02))",
+          border: "2px solid rgba(45,122,79,0.25)",
           borderRadius: "var(--r2)",
           padding: "24px 32px",
           textAlign: "center",
@@ -425,7 +425,7 @@ export default function RunModePage({
           {limitActive && (
             <div style={{
               marginLeft: "auto", background: "var(--blue-ghost)",
-              border: "1px solid rgba(59,130,246,0.2)", borderRadius: "var(--r)",
+              border: "1px solid rgba(59,85,168,0.2)", borderRadius: "var(--r)",
               padding: "8px 14px", fontSize: 12, fontFamily: "var(--mono)", color: "var(--blue)",
             }}>
               Active: {minLimit || "-"} mm to {maxLimit || "-"} mm

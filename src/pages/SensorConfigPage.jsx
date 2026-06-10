@@ -403,7 +403,7 @@ export default function SensorConfigPage({ user, onToast }) {
                         width: "100%",
                         justifyContent: "center",
                         color: "var(--blue)",
-                        borderColor: "rgba(59,130,246,0.5)",
+                        borderColor: "rgba(59,85,168,0.5)",
                       }}
                       onClick={() => applyOne(sid)}
                       disabled={saving}
@@ -451,11 +451,11 @@ export default function SensorConfigPage({ user, onToast }) {
                 marginTop: 8,
                 padding: "4px 10px",
                 borderRadius: 6,
-                fontSize: 12,
-                fontFamily: "var(--mono)",
-                background: "rgba(59,130,246,0.1)",
-                color: "var(--blue)",
-                border: "1px solid rgba(59,130,246,0.2)",
+                  fontSize: 12,
+                  fontFamily: "var(--mono)",
+                  background: "var(--blue-ghost)",
+                  color: "var(--blue)",
+                  border: "1px solid rgba(59,85,168,0.2)",
               }}>
                 ℹ️ {100 - parseInt(trimPct || 0) * 2}% readings used
               </div>

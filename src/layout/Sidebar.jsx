@@ -115,8 +115,10 @@ export default function Sidebar({ user, page, onNavigate, onLogout }) {
           borderBottom:   "1px solid var(--border)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div className="brand-mark"><Ic.Logo /></div>
-            <div className="brand-name">Thickness<span>Mon</span></div>
+            <div className="brand-mark">
+              <img src="/rajdeep-logo.png" alt="Rajdeep" style={{ height: 28, width: "auto" }} />
+            </div>
+            <div className="brand-name" style={{ fontSize: 13 }}>Thickness<span>Mon</span></div>
           </div>
           <button
             onClick={() => setOpen(false)}

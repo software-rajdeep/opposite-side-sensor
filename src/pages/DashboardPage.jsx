@@ -38,7 +38,7 @@ export default function DashboardPage({ user, onNavigate, rows, streamRate }) {
       desc:  "Configure sensor parameters, thresholds and sampling rate.",
       icon:  <Ic.Sensor />,
       color: "var(--blue)",
-      bg:    "rgba(59,130,246,0.1)",
+      bg:    "var(--blue-ghost)",
     },
     {
       id:    "run-mode",
@@ -46,7 +46,7 @@ export default function DashboardPage({ user, onNavigate, rows, streamRate }) {
       desc:  "Monitor real-time thickness data from active sensors.",
       icon:  <Ic.Activity />,
       color: "var(--green)",
-      bg:    "rgba(34,197,94,0.1)",
+      bg:    "var(--green-ghost)",
     },
     {
       id:    "download",
@@ -54,15 +54,15 @@ export default function DashboardPage({ user, onNavigate, rows, streamRate }) {
       desc:  "Export filtered or raw sensor readings as CSV files.",
       icon:  <Ic.Download />,
       color: "var(--amber)",
-      bg:    "rgba(245,158,11,0.1)",
+      bg:    "var(--amber-ghost)",
     },
     {
       id:    "backend",
       label: "Backend Access",
       desc:  "System configuration, server code and database management.",
       icon:  <Ic.Backend />,
-      color: "#a855f7",
-      bg:    "rgba(168,85,247,0.1)",
+      color: "var(--blue)",
+      bg:    "var(--blue-ghost)",
     },
   ].filter(t => access.includes(t.id));
 
@@ -155,7 +155,7 @@ export default function DashboardPage({ user, onNavigate, rows, streamRate }) {
           <div
             key={t.id}
             className="nav-tile"
-            style={{ "--tile-color": t.color, "--tile-bg": t.bg }}
+            style={{ "--tile-color": t.color }}
             onClick={() => onNavigate(t.id)}
           >
             <div className="tile-icon" style={{ background: t.bg, color: t.color }}>

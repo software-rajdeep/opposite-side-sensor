@@ -9,7 +9,7 @@ export default function Topbar({ user, page, onLogout }) {
       {/* BRAND */}
       <div className="topbar-brand">
         <div className="brand-mark">
-          <Ic.Logo />
+          <img src="/rajdeep-logo.png" alt="Rajdeep Automation" />
         </div>
         <div className="brand-name">
           Thickness<span>Monitoring</span>
@@ -20,7 +20,7 @@ export default function Topbar({ user, page, onLogout }) {
 
       {/* BREADCRUMB */}
       <div className="topbar-breadcrumb">
-        <span>cd22</span>
+        <span>CD22</span>
         <span className="sep">/</span>
         <span className="active">{PAGE_LABELS[page] || page}</span>
       </div>

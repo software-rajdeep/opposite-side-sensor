@@ -68,7 +68,7 @@ export default function DownloadPage({ user, onToast }) {
       <div style={{ padding: "0 32px", marginBottom: 20 }}>
         <div style={{
           background:   "var(--blue-ghost)",
-          border:       "1px solid rgba(59,130,246,0.2)",
+          border:       "1px solid rgba(59,85,168,0.2)",
           borderRadius: "var(--r)",
           padding:      "10px 14px",
           fontSize:     12,
@@ -91,7 +91,7 @@ export default function DownloadPage({ user, onToast }) {
             <div style={{
               width: 34, height: 34,
               background: "var(--blue-ghost)",
-              border: "1px solid rgba(59,130,246,0.2)",
+              border: "1px solid rgba(59,85,168,0.2)",
               borderRadius: 8,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: "var(--blue)",
@@ -123,7 +123,7 @@ export default function DownloadPage({ user, onToast }) {
             <div style={{
               width: 34, height: 34,
               background: "var(--green-ghost)",
-              border: "1px solid rgba(34,197,94,0.2)",
+              border: "1px solid rgba(45,122,79,0.2)",
               borderRadius: 8,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: "var(--green)",
