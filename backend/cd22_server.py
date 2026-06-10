@@ -196,7 +196,11 @@ def default_thickness_state():
         "calibration_captured_at": None,
         "calibration_reference_thickness": 0.0,
         "calibration_baseline_readings": {"A": None, "B": None},
-        "gap_distance": 0.0
+        "gap_distance": 0.0,
+        "auto_gap_active": False,
+        "object_thickness": None,
+        "thickness_tolerance_min": None,
+        "thickness_tolerance_max": None
     }
 
 def normalize_sensor_readings(raw_readings):
@@ -240,6 +244,30 @@ def load_thickness_state():
         state["gap_distance"] = float(gap_distance)
     except (TypeError, ValueError):
         state["gap_distance"] = 0.0
+
+    # Load auto-gap related fields
+    state["auto_gap_active"] = bool(loaded_state.get("auto_gap_active", False))
+    
+    obj_thickness = loaded_state.get("object_thickness")
+    if obj_thickness is not None:
+        try:
+            state["object_thickness"] = float(obj_thickness)
+        except (TypeError, ValueError):
+            state["object_thickness"] = None
+    
+    tol_min = loaded_state.get("thickness_tolerance_min")
+    if tol_min is not None:
+        try:
+            state["thickness_tolerance_min"] = float(tol_min)
+        except (TypeError, ValueError):
+            state["thickness_tolerance_min"] = None
+
+    tol_max = loaded_state.get("thickness_tolerance_max")
+    if tol_max is not None:
+        try:
+            state["thickness_tolerance_max"] = float(tol_max)
+        except (TypeError, ValueError):
+            state["thickness_tolerance_max"] = None
 
     state["reference_readings"] = normalize_sensor_readings(loaded_state.get("reference_readings", {}))
     state["calibration_baseline_readings"] = normalize_sensor_readings(
@@ -321,6 +349,10 @@ def reset_calibration_state():
     updated_state["calibration_reference_thickness"] = 0.0
     updated_state["calibration_baseline_readings"] = {"A": None, "B": None}
     updated_state["gap_distance"] = 0.0
+    updated_state["auto_gap_active"] = False
+    updated_state["object_thickness"] = None
+    updated_state["thickness_tolerance_min"] = None
+    updated_state["thickness_tolerance_max"] = None
     set_thickness_state(updated_state)
     return updated_state
 
@@ -364,10 +396,6 @@ def calculate_thickness(sensor_id, current_reading):
         reference_thickness = state.get("calibration_reference_thickness", 0.0)
         if baseline_reading is None:
             return round(float(reference_thickness), 3)
-        # The raw sensor value is a distance reading: when the object gets closer
-        # or thicker, the reading goes down. Convert that inverse movement into a
-        # thickness delta so the displayed value changes in the same direction as
-        # the actual object thickness.
         thickness = float(reference_thickness) + (float(baseline_reading) - float(current_reading))
         if thickness < 0:
             thickness = 0.0
@@ -589,10 +617,6 @@ stream_state = {
 # ==========================================
 @app.route('/config/file', methods=['GET', 'POST'])
 def handle_config_file():
-    """
-    GET: Returns the current sensor_config.json
-    POST: Overwrites sensor_config.json with the provided JSON payload
-    """
     if request.method == 'GET':
         try:
             with open(CONFIG_FILE_PATH, 'r') as f:
@@ -695,6 +719,84 @@ def thickness_gap_set():
         "gap_distance": current_state["gap_distance"],
         "calibration_active": True
     }), 200
+
+@app.route('/thickness/auto-gap', methods=['POST'])
+def thickness_auto_gap_set():
+    """
+    Set up auto-calculated gap distance using object thickness + sensor readings.
+    Total Gap = Sensor A distance + Object Thickness + Sensor B distance
+    Also saves thickness tolerance limits.
+    """
+    if not active_sensors_map:
+        return jsonify({"error": "No active sensors available."}), 400
+
+    data = request.json or {}
+    
+    try:
+        object_thickness = float(data.get("object_thickness"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid object thickness is required."}), 400
+    
+    if object_thickness <= 0:
+        return jsonify({"error": "Object thickness must be greater than zero."}), 400
+    
+    # Capture current sensor readings
+    captured_readings, failures = capture_active_sensor_readings()
+    if not captured_readings or len(captured_readings) < 2:
+        return jsonify({"error": "Unable to capture readings from both sensors."}), 500
+    
+    dist_A = captured_readings.get("A")
+    dist_B = captured_readings.get("B")
+    if dist_A is None or dist_B is None:
+        return jsonify({"error": "Both sensor readings are required."}), 500
+    
+    # Auto-calculate total gap: Sensor A distance + Object Thickness + Sensor B distance
+    # Sensor readings are already in mm relative to 35mm offset
+    # The actual distance from sensor face to object surface is: ZERO_OFFSET_MM + sensor_reading
+    # But the gap between sensor faces is: (ZERO_OFFSET_MM + dist_A) + object_thickness + (ZERO_OFFSET_MM + dist_B)
+    # Simplified: gap = 2*ZERO_OFFSET_MM + dist_A + dist_B + object_thickness
+    total_gap = 2 * ZERO_OFFSET_MM + float(dist_A) + float(dist_B) + object_thickness
+    
+    # Parse tolerance values
+    tol_min = data.get("thickness_tolerance_min")
+    tol_max = data.get("thickness_tolerance_max")
+    
+    if tol_min is not None:
+        try:
+            tol_min = float(tol_min)
+        except (TypeError, ValueError):
+            tol_min = None
+    
+    if tol_max is not None:
+        try:
+            tol_max = float(tol_max)
+        except (TypeError, ValueError):
+            tol_max = None
+    
+    current_state = get_thickness_state()
+    current_state["gap_distance"] = round(total_gap, 3)
+    current_state["calibration_completed"] = True
+    current_state["calibration_active"] = True
+    current_state["auto_gap_active"] = True
+    current_state["object_thickness"] = object_thickness
+    current_state["thickness_tolerance_min"] = tol_min
+    current_state["thickness_tolerance_max"] = tol_max
+    set_thickness_state(current_state)
+    
+    response = {
+        "message": "Auto-gap setup completed successfully.",
+        "gap_distance": round(total_gap, 3),
+        "calibration_active": True,
+        "auto_gap_active": True,
+        "object_thickness": object_thickness,
+        "captured_readings": captured_readings,
+        "thickness_tolerance_min": tol_min,
+        "thickness_tolerance_max": tol_max,
+    }
+    if failures:
+        response["warnings"] = [f"Sensor {sensor_id} did not return a reading." for sensor_id in failures]
+    
+    return jsonify(response), 200
 
 @app.route('/thickness/calibration/reset', methods=['POST'])
 def thickness_calibration_reset():
@@ -803,7 +905,6 @@ def config_trim():
         trim_pct = int(data.get("trim_pct", 10))
         if not (0 <= trim_pct <= 20):
             return jsonify({"error": "Trim percentage must be 0-20."}), 400
-        # Also persist to sensor_config.json
         try:
             with open(CONFIG_FILE_PATH, 'r') as f:
                 cfg = json.load(f)
@@ -906,7 +1007,6 @@ def background_stream_task():
     thick_query = insert_query.format(table=DB_TABLE_THICKNESS)
     thick_raw_query = insert_query.format(table=DB_TABLE_THICKNESS_RAW)
 
-    # Load trim percentage from config file
     def get_trim_pct():
         try:
             with open(CONFIG_FILE_PATH, 'r') as f:
@@ -958,7 +1058,6 @@ def background_stream_task():
             ))
             unf_id = (unf_id % LIMIT_UNFILTERED) + 1
             
-            # Store raw thickness reading in opposite_thickness_raw_readings buffer
             thick_raw_db_buffer.append((
                 thick_raw_id,
                 raw_ts,
@@ -982,7 +1081,6 @@ def background_stream_task():
                 else:
                     payload[f"distance_{sid}"] = None
 
-            # Calculate thickness from filtered averages
             if has_data:
                 dist_A = payload.get("distance_A")
                 dist_B = payload.get("distance_B")
@@ -1002,7 +1100,6 @@ def background_stream_task():
                     extras.execute_values(db_cur, fil_query, fil_tuple)
                     fil_id = (fil_id % LIMIT_FILTERED) + 1
                     
-                    # Store thickness reading in opposite_thickness_readings table
                     thick_tuple = [(
                         thick_id,
                         fil_ts,

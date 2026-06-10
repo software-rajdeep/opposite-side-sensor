@@ -12,6 +12,7 @@ export default function RunModePage({
   onToggle,
   thicknessState,
   onSetGapDistance,
+  onSetAutoGap,
   onResetGap,
   calibrationBusy,
   runModeVisitKey,
@@ -25,8 +26,14 @@ export default function RunModePage({
   const [minLimit, setMinLimit] = useState("");
   const [maxLimit, setMaxLimit] = useState("");
 
+  // Auto-gap state
+  const [autoGapMode, setAutoGapMode] = useState(false);
+  const [objectThickness, setObjectThickness] = useState("");
+  const [toleranceRange, setToleranceRange] = useState("");
+
   const gapDistance = thicknessState?.gap_distance || 0;
   const calibrationActive = Boolean(thicknessState?.calibration_active);
+  const autoGapActive = Boolean(thicknessState?.auto_gap_active);
   const [localCalibrated, setLocalCalibrated] = useState(false);
   const isCalibrated = calibrationActive || localCalibrated;
 
@@ -57,30 +64,84 @@ export default function RunModePage({
     }
   }, [runModeVisitKey]);
 
+  // Load saved tolerance values from thicknessState when available
+  useEffect(() => {
+    if (autoGapActive && thicknessState) {
+      if (thicknessState.thickness_tolerance_min !== null && thicknessState.thickness_tolerance_min !== undefined) {
+        setMinLimit(String(thicknessState.thickness_tolerance_min));
+      }
+      if (thicknessState.thickness_tolerance_max !== null && thicknessState.thickness_tolerance_max !== undefined) {
+        setMaxLimit(String(thicknessState.thickness_tolerance_max));
+      }
+      setLimitActive(true);
+    }
+  }, [autoGapActive, thicknessState]);
+
   function formatValue(value) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return "0";
     return numericValue.toFixed(3);
   }
 
+  function computeToleranceLimits(thickness, rangeVal) {
+    if (!rangeVal) return { tolMin: null, tolMax: null };
+    const r = Number(rangeVal);
+    if (!Number.isFinite(r)) return { tolMin: null, tolMax: null };
+    return {
+      tolMin: thickness - r,
+      tolMax: thickness + r,
+    };
+  }
+
   async function handleSubmitGap(e) {
     e.preventDefault();
-    const parsed = Number(gapValue);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      setGapError("Enter a valid distance greater than zero.");
-      return;
-    }
-    const success = await onSetGapDistance(parsed);
-    if (success) {
-      setShowGapDialog(false);
-      setGapValue("");
-      setGapError("");
+    
+    // Compute tolerance limits from the range value (if provided)
+    const usedThickness = autoGapMode ? Number(objectThickness) : null;
+    const { tolMin, tolMax } = computeToleranceLimits(usedThickness || 0, toleranceRange);
+
+    if (autoGapMode) {
+      // Auto-gap mode
+      const parsedThickness = Number(objectThickness);
+      if (!Number.isFinite(parsedThickness) || parsedThickness <= 0) {
+        setGapError("Enter a valid object thickness greater than zero.");
+        return;
+      }
+      const success = await onSetAutoGap(parsedThickness, tolMin, tolMax);
+      if (success) {
+        setShowGapDialog(false);
+        setGapValue("");
+        setGapError("");
+        // Apply tolerance limits immediately
+        if (tolMin !== null) setMinLimit(String(tolMin));
+        if (tolMax !== null) setMaxLimit(String(tolMax));
+        setLimitActive(tolMin !== null);
+      }
+    } else {
+      // Manual gap mode
+      const parsed = Number(gapValue);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        setGapError("Enter a valid distance greater than zero.");
+        return;
+      }
+      const success = await onSetGapDistance(parsed);
+      if (success) {
+        setShowGapDialog(false);
+        setGapValue("");
+        setGapError("");
+      }
     }
   }
 
   function handleReset() {
     onResetGap();
     setShowGapDialog(true);
+    setAutoGapMode(false);
+    setObjectThickness("");
+    setToleranceRange("");
+    setMinLimit("");
+    setMaxLimit("");
+    setLimitActive(false);
   }
 
   function getThicknessColor(v) {
@@ -277,32 +338,154 @@ export default function RunModePage({
           <div className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="gap-dialog-title">
             <form onSubmit={handleSubmitGap}>
               <div className="dialog-title" id="gap-dialog-title">Sensor Setup</div>
-              <div className="dialog-text">
-                <strong>Note:</strong>
-                <br />
-                Place both sensors at their fixed positions (opposite each other).
-                <br />
-                Enter the distance between the two sensor faces in millimeters.
+              
+              {/* Mode Toggle */}
+              <div style={{
+                display: "flex", gap: 8, marginBottom: 16,
+                background: "var(--bg2)", borderRadius: "var(--r)",
+                padding: 4,
+              }}>
+                <button
+                  type="button"
+                  className={!autoGapMode ? "btn btn-blue btn-sm" : "btn btn-sm btn-outline"}
+                  style={{ flex: 1, justifyContent: "center" }}
+                  onClick={() => { setAutoGapMode(false); setGapError(""); }}
+                >
+                  Manual Gap
+                </button>
+                <button
+                  type="button"
+                  className={autoGapMode ? "btn btn-blue btn-sm" : "btn btn-sm btn-outline"}
+                  style={{ flex: 1, justifyContent: "center" }}
+                  onClick={() => { setAutoGapMode(true); setGapError(""); }}
+                >
+                  Auto-Gap
+                </button>
               </div>
-              <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
-                Thickness = Total Gap - (35mm offset + Sensor A) - (35mm offset + Sensor B)
-                <br />
-                <span style={{ fontSize: 11, opacity: 0.7 }}>Both sensors read 0 at 35mm distance; actual distance = 35 + sensor reading</span>
-              </div>
-              <input
-                type="number"
-                step="0.001"
-                min="0.001"
-                className="form-input dialog-input"
-                placeholder="Enter distance between two sensors (mm)"
-                value={gapValue}
-                onChange={(e) => setGapValue(e.target.value)}
-                autoFocus
-              />
+
+              {!autoGapMode ? (
+                /* ── Manual Gap Mode ── */
+                <>
+                  <div className="dialog-text">
+                    <strong>Note:</strong>
+                    <br />
+                    Place both sensors at their fixed positions (opposite each other).
+                    <br />
+                    Enter the distance between the two sensor faces in millimeters.
+                  </div>
+                  <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
+                    Thickness = Total Gap - (35mm offset + Sensor A) - (35mm offset + Sensor B)
+                    <br />
+                    <span style={{ fontSize: 11, opacity: 0.7 }}>Both sensors read 0 at 35mm distance; actual distance = 35 + sensor reading</span>
+                  </div>
+                   <input
+                     type="number"
+                     step="0.001"
+                     min="0.001"
+                     className="form-input dialog-input"
+                     placeholder="Enter distance between two sensors (mm)"
+                     value={gapValue}
+                     onChange={(e) => setGapValue(e.target.value)}
+                     autoFocus
+                   />
+                 </>
+              ) : (
+                /* ── Auto-Gap Mode ── */
+                <>
+                  <div className="dialog-text" style={{ marginBottom: 4 }}>
+                    <strong>Auto-Gap Calculation:</strong>
+                  </div>
+                  <div style={{
+                    marginBottom: 16,
+                    fontSize: 13,
+                    color: "var(--text-2)",
+                    fontFamily: "var(--mono)",
+                    lineHeight: 1.6,
+                    padding: "10px 14px",
+                    background: "var(--blue-ghost)",
+                    borderRadius: "var(--r)",
+                    border: "1px solid rgba(59,85,168,0.2)",
+                  }}>
+                    Total Gap = Sensor A distance + Object Thickness + Sensor B distance
+                    <br />
+                    <span style={{ fontSize: 11, opacity: 0.7 }}>
+                      Place the object in center between both sensors
+                    </span>
+                  </div>
+
+                  {/* Object Thickness */}
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{
+                      fontSize: 12, fontWeight: 600, color: "var(--text-2)",
+                      fontFamily: "var(--mono)", marginBottom: 6, display: "block",
+                    }}>
+                      Enter the thickness of the object
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0.001"
+                      className="form-input"
+                      placeholder="e.g. 5.000 (mm)"
+                      value={objectThickness}
+                      onChange={(e) => setObjectThickness(e.target.value)}
+                      style={{ fontFamily: "var(--mono)", width: "100%" }}
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Tolerance Range for Auto-Gap */}
+                  <div style={{
+                    padding: "12px 14px",
+                    background: "var(--bg2)",
+                    borderRadius: "var(--r)",
+                    border: "1px solid var(--border)",
+                  }}>
+                    <div style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--text-3)",
+                      fontFamily: "var(--mono)",
+                      marginBottom: 6,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                    }}>
+                      Thickness Limit (Tolerance)
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text-3)", fontFamily: "var(--mono)", marginBottom: 8, lineHeight: 1.5 }}>
+                      Enter a range value. Min = Thickness − Range, Max = Thickness + Range
+                    </div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="form-input"
+                      placeholder="e.g. 0.2 (mm)"
+                      value={toleranceRange}
+                      onChange={(e) => setToleranceRange(e.target.value)}
+                      style={{ fontFamily: "var(--mono)", width: "100%" }}
+                    />
+                    {toleranceRange && objectThickness && (
+                      <div style={{
+                        marginTop: 6,
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontFamily: "var(--mono)",
+                        background: "var(--blue-ghost)",
+                        color: "var(--blue)",
+                        border: "1px solid rgba(59,85,168,0.2)",
+                      }}>
+                        Limits: {(Number(objectThickness) - Number(toleranceRange)).toFixed(3)} mm — {(Number(objectThickness) + Number(toleranceRange)).toFixed(3)} mm
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
               {gapError && <div className="dialog-error">{gapError}</div>}
               <div className="dialog-actions">
                 <button type="submit" className="btn btn-green" disabled={calibrationBusy}>
-                  {calibrationBusy ? "Saving..." : "Set Gap Distance"}
+                  {calibrationBusy ? "Saving..." : "Set"}
                 </button>
               </div>
             </form>
@@ -382,9 +565,20 @@ export default function RunModePage({
       <div className="section">
         <div className="section-header">
           <span className="section-title">Sensor Gap Configuration</span>
-          <button className="btn btn-sm btn-outline" onClick={handleReset} disabled={calibrationBusy}>
-            <Ic.Refresh /> Reset Gap
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {autoGapActive && (
+              <span style={{
+                fontSize: 11, fontFamily: "var(--mono)", color: "var(--blue)",
+                background: "var(--blue-ghost)", padding: "3px 10px",
+                borderRadius: "var(--r)", border: "1px solid rgba(59,85,168,0.2)",
+              }}>
+                Auto-Gap Mode
+              </span>
+            )}
+            <button className="btn btn-sm btn-outline" onClick={handleReset} disabled={calibrationBusy}>
+              <Ic.Refresh /> Reset Gap
+            </button>
+          </div>
         </div>
         <div style={{
           background: "linear-gradient(135deg, rgba(45,122,79,0.06), rgba(59,85,168,0.04))",
@@ -400,7 +594,10 @@ export default function RunModePage({
               : "Gap not configured - enter the distance between sensors"}
           </div>
           <div style={{ fontSize: 12, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
-            Thickness = Total Gap ({isCalibrated ? formatValue(gapDistance) : "?"} mm) - (35mm + Sensor A) - (35mm + Sensor B)
+            {autoGapActive
+              ? "Thickness = Auto-calculated from Sensor A + Object Thickness + Sensor B"
+              : "Thickness = Total Gap (" + (isCalibrated ? formatValue(gapDistance) : "?") + " mm) - (35mm + Sensor A) - (35mm + Sensor B)"
+            }
           </div>
         </div>
       </div>

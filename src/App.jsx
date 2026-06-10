@@ -89,6 +89,38 @@ export default function App() {
     }
   }
 
+  async function handleSetAutoGap(objectThickness, toleranceMin, toleranceMax) {
+    setCalibrationBusy(true);
+    try {
+      const response = await fetch(`${SERVER}/thickness/auto-gap`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          object_thickness: objectThickness,
+          thickness_tolerance_min: toleranceMin || null,
+          thickness_tolerance_max: toleranceMax || null,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        showToast(data?.error || "Unable to set auto gap", "error");
+        return false;
+      }
+
+      await refreshThicknessState();
+      try { window.localStorage.removeItem("thicknessmon.calibrated"); } catch {}
+      try { window.localStorage.setItem("thicknessmon.calibrated", "1"); } catch {}
+      showToast(data.message || "Auto-gap setup successfully", "success");
+      return true;
+    } catch {
+      showToast("Unable to set auto gap", "error");
+      return false;
+    } finally {
+      setCalibrationBusy(false);
+    }
+  }
+
   async function handleSetGapDistance(gapDistance) {
     setCalibrationBusy(true);
     try {
@@ -297,6 +329,7 @@ export default function App() {
               onToggle={handleToggle}
               thicknessState={thicknessState}
               onSetGapDistance={handleSetGapDistance}
+              onSetAutoGap={handleSetAutoGap}
               onResetGap={handleResetGap}
               calibrationBusy={calibrationBusy}
               runModeVisitKey={runModeVisitKey}
