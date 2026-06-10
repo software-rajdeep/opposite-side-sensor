@@ -105,8 +105,8 @@ export default function RunModePage({
     ctx.clearRect(0, 0, W, H);
 
     if (vals.length < 2) {
-      ctx.fillStyle = "var(--text-3)";
-      ctx.font = "11px monospace";
+      ctx.fillStyle = "#9ca3af";
+      ctx.font = "12px Inter, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("Waiting for thickness data...", W / 2, H / 2);
       return;
@@ -114,55 +114,120 @@ export default function RunModePage({
 
     const mn = parseFloat(minLimit);
     const mx = parseFloat(maxLimit);
-    const dataMin = Math.min(...vals) - 0.5;
-    const dataMax = Math.max(...vals) + 0.5;
-    const pad = { top: 10, bottom: 20, left: 36, right: 10 };
+    const dataMin = Math.min(...vals);
+    const dataMax = Math.max(...vals);
+    const range = dataMax - dataMin || 1;
+    const pad = { top: 16, bottom: 22, left: 44, right: 16 };
     const gW = W - pad.left - pad.right;
     const gH = H - pad.top - pad.bottom;
     const total = vals.length;
 
-    function xPos(i) { return pad.left + (i / (total - 1)) * gW; }
-    function yPos(v) { return pad.top + (1 - (v - dataMin) / (dataMax - dataMin)) * gH; }
+    function xPos(i) { return pad.left + (i / Math.max(total - 1, 1)) * gW; }
+    function yPos(v) { return pad.top + (1 - (v - dataMin) / range) * gH; }
 
-    // Grid lines
-    ctx.strokeStyle = "var(--border)";
+    // Background fill
+    ctx.fillStyle = "#fafbfc";
+    ctx.fillRect(pad.left, pad.top, gW, gH);
+
+    // Horizontal grid lines (lighter)
+    ctx.strokeStyle = "#e8ecf1";
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 4; i++) {
-      const y = pad.top + (i / 4) * gH;
+    const gridCount = 5;
+    for (let i = 0; i <= gridCount; i++) {
+      const y = pad.top + (i / gridCount) * gH;
       ctx.beginPath();
       ctx.moveTo(pad.left, y);
       ctx.lineTo(W - pad.right, y);
       ctx.stroke();
-      const label = (dataMax - (i / 4) * (dataMax - dataMin)).toFixed(2);
-      ctx.fillStyle = "var(--text-3)";
-      ctx.font = "9px monospace";
-      ctx.textAlign = "right";
-      ctx.fillText(label, pad.left - 4, y + 3);
+    }
+
+    // Vertical grid lines (lighter)
+    const vGridCount = 8;
+    for (let i = 1; i < vGridCount; i++) {
+      const x = pad.left + (i / vGridCount) * gW;
+      ctx.beginPath();
+      ctx.moveTo(x, pad.top);
+      ctx.lineTo(x, pad.top + gH);
+      ctx.stroke();
+    }
+
+    // Y-axis labels
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "10px Inter, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i <= gridCount; i++) {
+      const y = pad.top + (i / gridCount) * gH;
+      const val = dataMax - (i / gridCount) * range;
+      ctx.fillText(val.toFixed(2), pad.left - 6, y);
+    }
+
+    // X-axis labels (sample index)
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "9px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for (let i = 0; i < vGridCount; i++) {
+      const x = pad.left + (i / vGridCount) * gW;
+      ctx.fillText(`-${Math.round((vGridCount - i) * total / vGridCount)}`, x, pad.top + gH + 4);
     }
 
     // Min limit line
-    if (limitActive && !isNaN(mn) && mn >= dataMin && mn <= dataMax) {
-      ctx.strokeStyle = "rgba(178,73,73,0.5)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(pad.left, yPos(mn));
-      ctx.lineTo(W - pad.right, yPos(mn));
-      ctx.stroke();
-      ctx.setLineDash([]);
+    if (limitActive && !isNaN(mn)) {
+      const y = yPos(mn);
+      if (y >= pad.top && y <= pad.top + gH) {
+        ctx.strokeStyle = "#b24949";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#b24949";
+        ctx.font = "9px Inter, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(`Min ${mn.toFixed(2)}`, pad.left + 4, y - 2);
+      }
     }
 
     // Max limit line
-    if (limitActive && !isNaN(mx) && mx >= dataMin && mx <= dataMax) {
-      ctx.strokeStyle = "rgba(178,73,73,0.5)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(pad.left, yPos(mx));
-      ctx.lineTo(W - pad.right, yPos(mx));
-      ctx.stroke();
-      ctx.setLineDash([]);
+    if (limitActive && !isNaN(mx)) {
+      const y = yPos(mx);
+      if (y >= pad.top && y <= pad.top + gH) {
+        ctx.strokeStyle = "#b24949";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#b24949";
+        ctx.font = "9px Inter, sans-serif";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(`Max ${mx.toFixed(2)}`, pad.left + 4, y + 2);
+      }
     }
+
+    // Gradient fill under the line
+    const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + gH);
+    gradient.addColorStop(0, "rgba(45,122,79,0.15)");
+    gradient.addColorStop(1, "rgba(45,122,79,0.01)");
+    ctx.beginPath();
+    vals.forEach((v, i) => {
+      const x = xPos(i);
+      const y = yPos(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(xPos(vals.length - 1), pad.top + gH);
+    ctx.lineTo(xPos(0), pad.top + gH);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
 
     // Line
     ctx.beginPath();
@@ -172,18 +237,30 @@ export default function RunModePage({
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = "var(--green)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#2d7a4f";
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     ctx.stroke();
 
-    // Dots
+    // Dots (only show every Nth dot for cleaner look)
+    const dotStep = Math.max(1, Math.floor(vals.length / 60));
     vals.forEach((v, i) => {
+      if (i % dotStep !== 0 && i !== vals.length - 1) return;
       const inLimit = !limitActive || (
         (isNaN(mn) || v >= mn) && (isNaN(mx) || v <= mx)
       );
+      const x = xPos(i);
+      const y = yPos(v);
+      // Outer white ring
       ctx.beginPath();
-      ctx.arc(xPos(i), yPos(v), 3, 0, Math.PI * 2);
-      ctx.fillStyle = inLimit ? "var(--green)" : "var(--red)";
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      // Inner colored dot
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = inLimit ? "#2d7a4f" : "#b24949";
       ctx.fill();
     });
   }

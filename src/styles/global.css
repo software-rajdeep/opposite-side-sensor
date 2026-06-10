@@ -221,7 +221,7 @@ body {
   border-radius: var(--r);
   cursor: pointer;
   transition: all 0.15s;
-  color: var(--text);
+  color: #1e293b;
   font-size: 13px;
   font-weight: 500;
   border: 1px solid transparent;
