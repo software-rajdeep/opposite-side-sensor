@@ -83,6 +83,12 @@ export default function RunModePage({
     return numericValue.toFixed(3);
   }
 
+  function calcDistance(sensorReading) {
+    const n = Number(sensorReading);
+    if (!Number.isFinite(n)) return null;
+    return n + 35;
+  }
+
   function computeToleranceLimits(thickness, rangeVal) {
     if (!rangeVal) return { tolMin: null, tolMax: null };
     const r = Number(rangeVal);
@@ -604,13 +610,6 @@ export default function RunModePage({
             mm
           </div>
 
-          {/* Sensor readings below */}
-          {latest && (
-            <div style={{ display: "flex", gap: 24, marginTop: 8, fontSize: 12, fontFamily: "var(--mono)", color: "var(--text-3)" }}>
-              <span>Sensor A Distance: {latest.a !== null ? formatValue(latest.a) : "-"} mm</span>
-              <span>Sensor B Distance: {latest.b !== null ? formatValue(latest.b) : "-"} mm</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -628,7 +627,7 @@ export default function RunModePage({
                 &nbsp;Sensor {sid} Distance
               </div>
               <div className="stat-val" style={{ fontSize: 28, color: online ? "var(--blue)" : "var(--text-3)" }}>
-                {value !== null ? formatValue(value) : "-"}
+                {value !== null ? formatValue(calcDistance(value)) : "-"}
               </div>
               <div className="stat-sub">mm</div>
             </div>
@@ -734,8 +733,8 @@ export default function RunModePage({
                 <tr>
                   <th style={{ width: 50 }}>#</th>
                   <th>Timestamp</th>
-                  <th className="td-r">Sensor A (mm)</th>
-                  <th className="td-r">Sensor B (mm)</th>
+                  <th className="td-r">Sensor A Dist (mm)</th>
+                  <th className="td-r">Sensor B Dist (mm)</th>
                   <th className="td-r" style={{ color: "var(--green)" }}>Thickness (mm)</th>
                 </tr>
               </thead>
@@ -745,10 +744,10 @@ export default function RunModePage({
                     <td className="td-mono td-dim">{r.id}</td>
                     <td className="td-mono td-dim" style={{ fontSize: 11 }}>{r.ts}</td>
                     <td className="td-mono td-r">
-                      {r.a !== null ? formatValue(r.a) : <span style={{ color: "var(--text-3)" }}>-</span>}
+                      {r.a !== null ? formatValue(calcDistance(r.a)) : <span style={{ color: "var(--text-3)" }}>-</span>}
                     </td>
                     <td className="td-mono td-r">
-                      {r.b !== null ? formatValue(r.b) : <span style={{ color: "var(--text-3)" }}>-</span>}
+                      {r.b !== null ? formatValue(calcDistance(r.b)) : <span style={{ color: "var(--text-3)" }}>-</span>}
                     </td>
                     <td className="td-mono td-r" style={{ fontWeight: 700, color: getThicknessColor(r.thickness) }}>
                       {r.thickness !== null ? formatValue(r.thickness) : <span style={{ color: "var(--text-3)" }}>-</span>}
