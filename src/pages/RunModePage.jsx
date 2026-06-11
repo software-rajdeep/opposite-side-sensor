@@ -183,14 +183,17 @@ export default function RunModePage({
     const mx = parseFloat(maxLimit);
     const dataMin = Math.min(...vals);
     const dataMax = Math.max(...vals);
-    const range = dataMax - dataMin || 1;
+    const yPadding = Math.max((dataMax - dataMin) * 5, 0.5);
+    const paddedMin = dataMin - yPadding;
+    const paddedMax = dataMax + yPadding;
+    const range = paddedMax - paddedMin || 1;
     const pad = { top: 16, bottom: 22, left: 44, right: 16 };
     const gW = W - pad.left - pad.right;
     const gH = H - pad.top - pad.bottom;
     const total = vals.length;
 
     function xPos(i) { return pad.left + (i / Math.max(total - 1, 1)) * gW; }
-    function yPos(v) { return pad.top + (1 - (v - dataMin) / range) * gH; }
+    function yPos(v) { return pad.top + (1 - (v - paddedMin) / range) * gH; }
 
     // Background fill
     ctx.fillStyle = "#fafbfc";
@@ -225,8 +228,8 @@ export default function RunModePage({
     ctx.textBaseline = "middle";
     for (let i = 0; i <= gridCount; i++) {
       const y = pad.top + (i / gridCount) * gH;
-      const val = dataMax - (i / gridCount) * range;
-      ctx.fillText(val.toFixed(2), pad.left - 6, y);
+      const val = paddedMax - (i / gridCount) * range;
+      ctx.fillText(val.toFixed(3), pad.left - 6, y);
     }
 
     // X-axis labels (sample index)
