@@ -337,6 +337,19 @@ body {
   box-shadow: 0 0 0 3px rgba(59,85,168,0.08);
 }
 .input-wrap svg { color: var(--text-3); flex-shrink: 0; }
+.pwd-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+.pwd-toggle:hover { color: var(--text-2); }
 .input-wrap input {
   flex: 1;
   background: none;
@@ -384,31 +397,6 @@ body {
   padding: 9px 12px;
   margin-bottom: 14px;
 }
-
-.demo-hint { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px; }
-.demo-hint-title {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--text-3);
-  margin-bottom: 8px;
-}
-.demo-accounts { display: flex; flex-direction: column; gap: 4px; }
-.demo-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 5px 8px;
-  background: var(--bg3);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.demo-row:hover { background: var(--bg4); }
-.demo-row-left  { display: flex; align-items: center; gap: 8px; }
-.demo-user      { font-size: 12px; font-weight: 500; color: var(--text); }
-.demo-pass      { font-size: 11px; color: var(--text-3); }
 
 /* ── CARDS ── */
 .card {

@@ -22,13 +22,6 @@ export function setServerBase(value) {
 
 export const SERVER = getServerBase() || DEFAULT_SERVER;
 
-export const DEMO_ACCOUNTS = [
-  { username: "superadmin", password: "superadmin123", role: "superadmin" },
-  { username: "admin",      password: "admin123",      role: "admin"      },
-  { username: "supervisor", password: "super123",      role: "supervisor" },
-  { username: "worker",     password: "worker123",     role: "worker"     },
-];
-
 export const SENSOR_CONFIGS = {
   A: { ip: "192.168.1.7", port: 8234, name: "Sensor A" },
   B: { ip: "192.168.1.8", port: 8234, name: "Sensor B" },

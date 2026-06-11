@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Ic } from "../icons/Icons";
 import Spinner from "../components/Spinner";
-import { SERVER, DEMO_ACCOUNTS } from "../constants/config";
+import { SERVER } from "../constants/config";
 
 export default function LoginPage({ onLogin }) {
-  const [u,       setU]       = useState("");
-  const [p,       setP]       = useState("");
-  const [err,     setErr]     = useState("");
-  const [loading, setLoading] = useState(false);
+  const [u,           setU]           = useState("");
+  const [p,           setP]           = useState("");
+  const [err,         setErr]         = useState("");
+  const [loading,     setLoading]     = useState(false);
+  const [showPwd,     setShowPwd]     = useState(false);
 
   function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
     const controller = new AbortController();
@@ -39,11 +40,6 @@ export default function LoginPage({ onLogin }) {
     }
 
     setLoading(false);
-  }
-
-  function fillDemo(username, password) {
-    setU(username);
-    setP(password);
   }
 
   return (
@@ -88,12 +84,21 @@ export default function LoginPage({ onLogin }) {
           <div className="input-wrap">
             <Ic.Lock />
             <input
-              type="password"
+              type={showPwd ? "text" : "password"}
               value={p}
               onChange={e => setP(e.target.value)}
               placeholder="Enter password"
               onKeyDown={e => e.key === "Enter" && handleLogin()}
             />
+            <button
+              type="button"
+              className="pwd-toggle"
+              onClick={() => setShowPwd(v => !v)}
+              tabIndex={-1}
+              aria-label={showPwd ? "Hide password" : "Show password"}
+            >
+              {showPwd ? <Ic.EyeOff /> : <Ic.Eye />}
+            </button>
           </div>
         </div>
 
@@ -105,25 +110,6 @@ export default function LoginPage({ onLogin }) {
         >
           {loading ? <><Spinner /> Authenticating…</> : "Sign In"}
         </button>
-
-        {/* DEMO ACCOUNTS */}
-        <div className="demo-hint">
-          <div className="demo-hint-title">Demo Accounts</div>
-          <div className="demo-accounts">
-            {DEMO_ACCOUNTS.map(acc => (
-              <div
-                key={acc.username}
-                className="demo-row"
-                onClick={() => fillDemo(acc.username, acc.password)}
-              >
-                <div className="demo-row-left">
-                  <span className="demo-user">{acc.username}</span>
-                </div>
-                <span className="demo-pass">{acc.password}</span>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* HELP */}
         <div style={{

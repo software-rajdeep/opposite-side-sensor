@@ -373,11 +373,6 @@ export default function RunModePage({
                     <br />
                     Enter the distance between the two sensor faces in millimeters.
                   </div>
-                  <div style={{ marginBottom: 12, fontSize: 13, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
-                    Thickness = Total Gap - (35mm offset + Sensor A) - (35mm offset + Sensor B)
-                    <br />
-                    <span style={{ fontSize: 11, opacity: 0.7 }}>Both sensors read 0 at 35mm distance; actual distance = 35 + sensor reading</span>
-                  </div>
                    <input
                      type="number"
                      step="0.001"
@@ -394,23 +389,6 @@ export default function RunModePage({
                 <>
                   <div className="dialog-text" style={{ marginBottom: 4 }}>
                     <strong>Auto-Gap Calculation:</strong>
-                  </div>
-                  <div style={{
-                    marginBottom: 16,
-                    fontSize: 13,
-                    color: "var(--text-2)",
-                    fontFamily: "var(--mono)",
-                    lineHeight: 1.6,
-                    padding: "10px 14px",
-                    background: "var(--blue-ghost)",
-                    borderRadius: "var(--r)",
-                    border: "1px solid rgba(59,85,168,0.2)",
-                  }}>
-                    Total Gap = Sensor A distance + Object Thickness + Sensor B distance
-                    <br />
-                    <span style={{ fontSize: 11, opacity: 0.7 }}>
-                      Place the object in center between both sensors
-                    </span>
                   </div>
 
                   {/* Object Thickness */}
@@ -451,9 +429,6 @@ export default function RunModePage({
                       letterSpacing: "0.5px",
                     }}>
                       Thickness Limit (Tolerance)
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text-3)", fontFamily: "var(--mono)", marginBottom: 8, lineHeight: 1.5 }}>
-                      Enter a range value. Min = Thickness − Range, Max = Thickness + Range
                     </div>
                     <input
                       type="number"
@@ -592,12 +567,6 @@ export default function RunModePage({
             {isCalibrated
               ? "Total Gap: " + formatValue(gapDistance) + " mm"
               : "Gap not configured - enter the distance between sensors"}
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text-2)", fontFamily: "var(--mono)", lineHeight: 1.6 }}>
-            {autoGapActive
-              ? "Thickness = Auto-calculated from Sensor A + Object Thickness + Sensor B"
-              : "Thickness = Total Gap (" + (isCalibrated ? formatValue(gapDistance) : "?") + " mm) - (35mm + Sensor A) - (35mm + Sensor B)"
-            }
           </div>
         </div>
       </div>
