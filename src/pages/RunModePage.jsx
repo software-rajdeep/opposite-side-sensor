@@ -607,8 +607,8 @@ export default function RunModePage({
           {/* Sensor readings below */}
           {latest && (
             <div style={{ display: "flex", gap: 24, marginTop: 8, fontSize: 12, fontFamily: "var(--mono)", color: "var(--text-3)" }}>
-              <span>Sensor A: {latest.a !== null ? formatValue(latest.a) : "-"} mm</span>
-              <span>Sensor B: {latest.b !== null ? formatValue(latest.b) : "-"} mm</span>
+              <span>Sensor A Distance: {latest.a !== null ? formatValue(latest.a) : "-"} mm</span>
+              <span>Sensor B Distance: {latest.b !== null ? formatValue(latest.b) : "-"} mm</span>
             </div>
           )}
         </div>
@@ -625,12 +625,12 @@ export default function RunModePage({
             <div key={sid} className="stat-card">
               <div className="stat-label">
                 <span className={dotClass} style={{ display: "inline-block" }} />
-                &nbsp;Sensor {sid}
+                &nbsp;Sensor {sid} Distance
               </div>
               <div className="stat-val" style={{ fontSize: 28, color: online ? "var(--blue)" : "var(--text-3)" }}>
                 {value !== null ? formatValue(value) : "-"}
               </div>
-              <div className="stat-sub">mm distance to sensor</div>
+              <div className="stat-sub">mm</div>
             </div>
           );
         })}
