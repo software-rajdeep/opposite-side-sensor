@@ -30,8 +30,7 @@ export default function SensorConfigPage({ user, onToast }) {
   if (!ROLE_ACCESS[user.role]?.includes("sensor-config")) return <AccessDenied />;
 
   const [config, setConfig] = useState({
-    A: { sampling: "0", averaging: "2", polarity: "0", alarm: "0" },
-    B: { sampling: "0", averaging: "2", polarity: "0", alarm: "0" },
+    sampling: "0", averaging: "2", polarity: "0", alarm: "0",
   });
 
   const [streamRate, setStreamRate] = useState("5");
@@ -48,8 +47,8 @@ export default function SensorConfigPage({ user, onToast }) {
     setLog(prev => [...prev, { ts, msg, type }]);
   }
 
-  function updateConfig(sid, key, val) {
-    setConfig(c => ({ ...c, [sid]: { ...c[sid], [key]: val } }));
+  function updateConfig(key, val) {
+    setConfig(c => ({ ...c, [key]: val }));
   }
 
   // ── LOAD CONFIG ──────────────────────────────────────────────────────────
@@ -68,20 +67,15 @@ export default function SensorConfigPage({ user, onToast }) {
       const OP_MAP = { "Light_ON":"0","Dark_ON":"1" };
       const AL_MAP = { "Clamp":"0","Hold":"1" };
 
-      const newConfig = { ...config };
-      for (const sid of ["A","B"]) {
-        const key = `sensor_${sid}`;
-        if (!cfg[key]) continue;
-        if (cfg[key].sampling_period)
-          newConfig[sid].sampling  = SP_MAP[cfg[key].sampling_period] ?? "0";
-        if (cfg[key].averaging !== undefined)
-          newConfig[sid].averaging = AV_MAP[String(cfg[key].averaging)] ?? "2";
-        if (cfg[key].output_polarity)
-          newConfig[sid].polarity  = OP_MAP[cfg[key].output_polarity] ?? "0";
-        if (cfg[key].alarm_output)
-          newConfig[sid].alarm     = AL_MAP[cfg[key].alarm_output] ?? "0";
+      const loaded = {};
+      const sa = cfg.sensor_A;
+      if (sa) {
+        if (sa.sampling_period)   loaded.sampling  = SP_MAP[sa.sampling_period] ?? "0";
+        if (sa.averaging !== undefined) loaded.averaging = AV_MAP[String(sa.averaging)] ?? "2";
+        if (sa.output_polarity)   loaded.polarity  = OP_MAP[sa.output_polarity] ?? "0";
+        if (sa.alarm_output)      loaded.alarm     = AL_MAP[sa.alarm_output] ?? "0";
       }
-      setConfig(newConfig);
+      setConfig(prev => ({ ...prev, ...loaded }));
       addLog("Config loaded from server", "ok");
       onToast("Configuration loaded", "success");
     } catch (e) {
@@ -100,16 +94,20 @@ export default function SensorConfigPage({ user, onToast }) {
     return res.json();
   }
 
-  // ── UPDATE JSON FILE ─────────────────────────────────────────────────────
-  async function updateJSON(sid, spIdx, avIdx, opIdx, alIdx) {
+  // ── UPDATE JSON FILE (both sensors) ──────────────────────────────────────
+  async function updateBothJSON(spIdx, avIdx, opIdx, alIdx) {
     const getRes = await fetch(`${SERVER}/config/file`);
     const cfg    = await getRes.json();
-    const key    = `sensor_${sid}`;
-    if (!cfg[key]) cfg[key] = {};
-    cfg[key].sampling_period = SP_JSON[spIdx];
-    cfg[key].averaging       = parseInt(AV_JSON[avIdx]);
-    cfg[key].output_polarity = OP_LABEL[opIdx];
-    cfg[key].alarm_output    = AL_LABEL[alIdx];
+
+    for (const sid of ["A","B"]) {
+      const key = `sensor_${sid}`;
+      if (!cfg[key]) cfg[key] = {};
+      cfg[key].sampling_period = SP_JSON[spIdx];
+      cfg[key].averaging       = parseInt(AV_JSON[avIdx]);
+      cfg[key].output_polarity = OP_LABEL[opIdx];
+      cfg[key].alarm_output    = AL_LABEL[alIdx];
+    }
+
     await fetch(`${SERVER}/config/file`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -117,58 +115,18 @@ export default function SensorConfigPage({ user, onToast }) {
     });
   }
 
-  // ── APPLY ONE SENSOR ─────────────────────────────────────────────────────
-  async function applyOne(sid) {
-    const spIdx = parseInt(config[sid].sampling);
-    const avIdx = parseInt(config[sid].averaging);
-    const opIdx = parseInt(config[sid].polarity);
-    const alIdx = parseInt(config[sid].alarm);
-    let allOk   = true;
-
-    try {
-      addLog(`[${sid}] Writing Sampling → ${SP_LABEL[spIdx]}`, "inf");
-      const r1 = await writeHW(sid, REG.sampling.addr_h, REG.sampling.addr_l, SP_VALS[spIdx]);
-      if (r1.message) addLog(`[${sid}] ✓ Sampling = ${SP_LABEL[spIdx]}`, "ok");
-      else { addLog(`[${sid}] ✗ Sampling failed`, "err"); allOk = false; }
-
-      addLog(`[${sid}] Writing Averaging → ${AV_LABEL[avIdx]}`, "inf");
-      const r2 = await writeHW(sid, REG.averaging.addr_h, REG.averaging.addr_l, AV_VALS[avIdx]);
-      if (r2.message) addLog(`[${sid}] ✓ Averaging = ${AV_LABEL[avIdx]}`, "ok");
-      else { addLog(`[${sid}] ✗ Averaging failed`, "err"); allOk = false; }
-
-      addLog(`[${sid}] Writing Polarity → ${OP_LABEL[opIdx]}`, "inf");
-      const r3 = await writeHW(sid, REG.polarity.addr_h, REG.polarity.addr_l, OP_VALS[opIdx]);
-      if (r3.message) addLog(`[${sid}] ✓ Polarity = ${OP_LABEL[opIdx]}`, "ok");
-      else { addLog(`[${sid}] ✗ Polarity failed`, "err"); allOk = false; }
-
-      addLog(`[${sid}] Writing Alarm → ${AL_LABEL[alIdx]}`, "inf");
-      const r4 = await writeHW(sid, REG.alarm.addr_h, REG.alarm.addr_l, AL_VALS[alIdx]);
-      if (r4.message) addLog(`[${sid}] ✓ Alarm = ${AL_LABEL[alIdx]}`, "ok");
-      else { addLog(`[${sid}] ✗ Alarm failed`, "err"); allOk = false; }
-
-      if (allOk) await updateJSON(sid, spIdx, avIdx, opIdx, alIdx);
-
-    } catch (e) {
-      addLog(`[${sid}] ✗ Error: ${e.message}`, "err");
-      allOk = false;
-    }
-
-    if (allOk) onToast(`Sensor ${sid} configured successfully`, "success");
-    else       onToast(`Sensor ${sid} — some writes failed`, "error");
-  }
-
-  // ── SAVE ALL ─────────────────────────────────────────────────────────────
+  // ── SAVE (applies to both sensors) ───────────────────────────────────────
   async function handleSave() {
     setSaving(true);
-    addLog("──── Save All started ────", "sys");
+    addLog("──── Save started (both sensors) ────", "sys");
     let allOk = true;
 
-    for (const sid of ["A","B"]) {
-      const spIdx = parseInt(config[sid].sampling);
-      const avIdx = parseInt(config[sid].averaging);
-      const opIdx = parseInt(config[sid].polarity);
-      const alIdx = parseInt(config[sid].alarm);
+    const spIdx = parseInt(config.sampling);
+    const avIdx = parseInt(config.averaging);
+    const opIdx = parseInt(config.polarity);
+    const alIdx = parseInt(config.alarm);
 
+    for (const sid of ["A","B"]) {
       try {
         addLog(`[${sid}] Writing Sampling → ${SP_LABEL[spIdx]}`, "inf");
         const r1 = await writeHW(sid, REG.sampling.addr_h, REG.sampling.addr_l, SP_VALS[spIdx]);
@@ -190,13 +148,22 @@ export default function SensorConfigPage({ user, onToast }) {
         if (r4.message) addLog(`[${sid}] ✓ Alarm = ${AL_LABEL[alIdx]}`, "ok");
         else { addLog(`[${sid}] ✗ Alarm failed`, "err"); allOk = false; }
 
-        if (allOk) await updateJSON(sid, spIdx, avIdx, opIdx, alIdx);
-
       } catch (e) {
         addLog(`[${sid}] ✗ Error: ${e.message}`, "err");
         allOk = false;
       }
       await new Promise(r => setTimeout(r, 300));
+    }
+
+    // Update JSON for both sensors
+    if (allOk) {
+      try {
+        await updateBothJSON(spIdx, avIdx, opIdx, alIdx);
+        addLog("[JSON] ✓ Both sensors updated", "ok");
+      } catch {
+        addLog("[JSON] ✗ JSON sync failed", "err");
+        allOk = false;
+      }
     }
 
     try {
@@ -214,9 +181,9 @@ export default function SensorConfigPage({ user, onToast }) {
       allOk = false;
     }
 
-    addLog("──── Save All complete ────", "sys");
+    addLog("──── Save complete ────", "sys");
     setSaving(false);
-    onToast(allOk ? "Configuration saved successfully" : "Some writes failed — check log", allOk ? "success" : "error");
+    onToast(allOk ? "Both sensors configured successfully" : "Some writes failed — check log", allOk ? "success" : "error");
   }
 
   // ── APPLY STREAM RATE ────────────────────────────────────────────────────
@@ -357,17 +324,16 @@ export default function SensorConfigPage({ user, onToast }) {
 
       <div className="config-grid">
 
-        {/* PER-SENSOR TABLE */}
+        {/* SHARED PARAMETERS — applies to both sensors */}
         <div className="table-wrap">
           <div className="card-header">
-            <div className="card-title"><Ic.Sensor /> Per-Sensor Parameters</div>
+            <div className="card-title"><Ic.Sensor /> Shared Parameters (applies to both sensors)</div>
           </div>
           <table>
             <thead>
               <tr>
                 <th>Parameter</th>
-                <th>Sensor A</th>
-                <th>Sensor B</th>
+                <th>Value</th>
               </tr>
             </thead>
             <tbody>
@@ -376,43 +342,19 @@ export default function SensorConfigPage({ user, onToast }) {
                   <td style={{ color: "var(--text-2)", fontFamily: "var(--mono)", fontSize: 12 }}>
                     {row.label}
                   </td>
-                  {["A","B"].map(sid => (
-                    <td key={sid}>
-                      <select
-                        className="form-select"
-                        value={config[sid][row.key]}
-                        onChange={e => updateConfig(sid, row.key, e.target.value)}
-                      >
-                        {row.opts.map((o, i) => (
-                          <option key={i} value={i}>{o}</option>
-                        ))}
-                      </select>
-                    </td>
-                  ))}
+                  <td>
+                    <select
+                      className="form-select"
+                      value={config[row.key]}
+                      onChange={e => updateConfig(row.key, e.target.value)}
+                    >
+                      {row.opts.map((o, i) => (
+                        <option key={i} value={i}>{o}</option>
+                      ))}
+                    </select>
+                  </td>
                 </tr>
               ))}
-              <tr>
-                <td style={{ color: "var(--blue)", fontFamily: "var(--mono)", fontSize: 12 }}>
-                  Apply
-                </td>
-                {["A","B"].map(sid => (
-                  <td key={sid}>
-                    <button
-                      className="btn btn-outline btn-sm"
-                      style={{
-                        width: "100%",
-                        justifyContent: "center",
-                        color: "var(--blue)",
-                        borderColor: "rgba(59,85,168,0.5)",
-                      }}
-                      onClick={() => applyOne(sid)}
-                      disabled={saving}
-                    >
-                      Apply Sensor {sid}
-                    </button>
-                  </td>
-                ))}
-              </tr>
             </tbody>
           </table>
         </div>
